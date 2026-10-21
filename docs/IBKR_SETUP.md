@@ -86,6 +86,14 @@ This is a retrieval client and offline envelope validator, **not** a reconciled 
 - Hosted page: remains the synthetic-data prototype. No broker credential or private report is deployed to it.
 - Next gate: validate a real report locally, normalize the ledger with explicit currency/detail handling, reconcile positions/cash/cost basis to IBKR, then connect an owner-authorized application data route. Keep synthetic histories out of real-account views.
 
+## Connection settings in the app
+
+Open `#settings/ibkr` for current status, setup steps, and official stop-access instructions. The hosted prototype remains disconnected and deliberately has no token-entry form. The local client described above is separate from this UI.
+
+To disable future Flex retrieval globally, use Client Portal → Reporting → Flex Queries → Flex Web Service Configuration, switch the service off, and save. This affects other Flex consumers too and does not delete reports already retrieved. The official guide documents this Portal control; we have not found a documented remote disable/revoke endpoint.
+
+App-only pause, disconnect (remove its saved credential) and imported-data deletion belong to the future owner-authorized backend. Do not substitute localStorage flags for stopping a server sync worker or deleting server data.
+
 ## Official sources
 
 - Flex overview: https://www.interactivebrokers.com/docs/web-api/flex-web-service/introduction
@@ -102,3 +110,5 @@ This is a retrieval client and offline envelope validator, **not** a reconciled 
 - OAuth 1.0a eligibility: https://www.interactivebrokers.com/docs/web-api/authentication/oauth-1a/introduction
 
 XML parser upstream: https://github.com/tiran/defusedxml . It is a supporting dependency, not an IBKR SDK or an authentication provider.
+
+- Disable Flex access in Client Portal: https://www.ibkrguides.com/advisorportal/ug/flex-web-service.htm

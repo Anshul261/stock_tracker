@@ -10,8 +10,8 @@
   "consoleErrors": [],
   "externalRequests": [],
   "filterHandlerMs": {
-    "p50": 1.2000000001862645,
-    "p95": 1.5,
+    "p50": 1.099999999627471,
+    "p95": 1.400000000372529,
     "samples": 50
   },
   "coverage": [

@@ -12,3 +12,6 @@ Face: Public Sans genuinely bundled locally, neutral terminal surfaces, one blue
 Grid: at 1440px, 56 rail + 300 list + 8 separator + 1076 canvas = 1440. Canvas gutters are 24px on each side. The split is keyboard and pointer adjustable. At phone widths the rail becomes bottom navigation and instrument details use the whole work area. Search and tab navigation stay outside scrolling content.
 
 Acceptance: no stock/research dialogs; persistent visible search; no retained document scroll hiding Discover controls; browser back/forward; closable stock tabs; position/research subtabs; resize by mouse and keyboard; watchlist persistence; source calculations; responsive widths 320/390/768/1440; original portfolio totals retained; no external requests.
+
+
+Settings update: the screen answers “Is IBKR connected, and how can I stop its access?” first. Keep the existing data-terminal direction and Public Sans. A flat connection summary, three truthful status facts, and inline disclosures carry the task. No simulated connected state or ineffective disconnect button. IBKR setup and broker-wide disabling lead to the official Portal; data/privacy stays on a page tab. No token entry until an owner-authorized server credential service exists.
