@@ -2,6 +2,8 @@
 
 Reviewed 21 October 2026. Authentication is not implemented in this prototype.
 
+The deployed demo at https://still-investing-workspace.anshulraj.chatgpt.site uses the hosting platform's owner-only access gate. This is separate from application-level authentication. No WorkOS account is required to view that private preview; use the owning ChatGPT account.
+
 ## Prototype
 
 The UI runs entirely in the browser with synthetic data. No brokerage connection, credentials, real holdings, hosted model calls, third-party scripts, telemetry, remote fonts or market-data requests are present. Watchlist ticker preferences alone are stored in localStorage. The portable HTML can be opened offline. The local HTTP preview binds to 127.0.0.1; that is a development boundary, not an authentication system.

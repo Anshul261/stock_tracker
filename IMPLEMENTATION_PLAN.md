@@ -1,6 +1,10 @@
 # Private stock research workspace
 
-Research date: 21 October 2026. Status: research and plan complete; application not built and no brokerage account connected.
+Research date: 21 October 2026. Current status: stage 0 interactive prototype complete and privately deployed; no brokerage account connected. Browser checks passed at widths 320, 390, 768, 1024 and 1440. The prototype uses synthetic data and deterministic research templates; production performance budgets and accessibility audit remain pending.
+
+The reviewed UI now uses persistent page and stock tabs, in-page research, visible search and an adjustable instrument/main split. This supersedes the original drawer-based prototype. IBKR integration, application authentication and live AI remain unimplemented.
+
+Private prototype: https://still-investing-workspace.anshulraj.chatgpt.site . The hosting platform enforces owner-only access. Application-level authentication is not implemented; see AUTH_DECISION.md before connecting real data.
 
 ## Decision
 
@@ -48,7 +52,7 @@ Upstream provenance is a starting point, not a security audit. Before execution,
 
 ## Environment and remaining inputs
 
-The workspace is empty apart from Git metadata. Runtime inspection found no configured application secrets or outbound identities. The enforced outbound policy permits repositories/package registries but does not currently list IBKR, SEC or model/provider hosts. Live integration needs those specific destinations enabled through environment configuration. Offline implementation and synthetic tests can proceed independently.
+The workspace now contains the prototype, its standalone HTML build, verification script and screenshots. Runtime inspection found no configured broker/model secrets or outbound identities. The enforced outbound policy permits repositories/package registries but does not currently list IBKR, SEC or model/provider hosts. Live integration needs those specific destinations enabled through environment configuration. Synthetic-data development can proceed independently.
 
 Later inputs: a user-generated Activity Flex export for reconciliation, preferred reporting currency, covered markets, and a deployment target. These do not block stage 1. Never request an IBKR password in chat.
 

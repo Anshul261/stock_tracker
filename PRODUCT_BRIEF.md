@@ -2,6 +2,12 @@
 
 User direction: speed, ease of use and taste are the highest product priorities. Financial correctness and privacy remain requirements. Status: design direction and acceptance targets; implementation and measurements are pending.
 
+## Workspace revision after user review
+
+The user rejected modal stock/research drawers and hidden navigation. Their sketch is the controlling composition: a thin utility rail, persistent document tabs, a searchable instrument pane and an adjustable main work area. Stocks open as closable tabs; their Overview, Position and Research sections live in the main canvas. Portfolio, Discover and Research are always reachable through labeled top tabs. Research uses Exposure, Scenarios and Performance tabs. Search stays visible outside the scrolling instrument list; global search is an ordinary visible input with Ctrl/Cmd+K as an additional route. On phones, the main canvas uses the full width and the rail becomes labeled bottom navigation. No stock or research dialog dims the application.
+
+The implementation follows Leonxlnx/taste-skill's Data terminal app direction, seed 125807515, with locally bundled Public Sans, neutral surfaces and restrained blue selection lines. This revision supersedes the earlier warm-green visual direction below. See `.taste-skill/design-notes.md` and `.taste-skill/review.md` for the reviewed design and checks.
+
 ## The experience
 
 Open the app and understand how the portfolio is doing immediately. Select a holding and see its chart, purchase history and return without losing place. Ask a question in context and get an inspectable answer alongside the relevant view.

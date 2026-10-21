@@ -1,13 +1,21 @@
 """Build the self-contained offline prototype; no external packages required."""
 from pathlib import Path
+import base64
 
 ROOT = Path(__file__).resolve().parent
 source = ROOT / "prototype"
 html = (source / "index.html").read_text()
-html = html.replace('<link rel="stylesheet" href="style.css">', '<style>\n' + (source / "style.css").read_text() + '\n</style>')
-html = html.replace('<script src="app.js"></script>', '<script>\n' + (source / "app.js").read_text() + '\n</script>')
+css = (source / "style.css").read_text()
+font = base64.b64encode((source / 'assets/public-sans.ttf').read_bytes()).decode()
+css = css.replace("url('assets/public-sans.ttf')", "url('data:font/ttf;base64," + font + "')")
+html = html.replace('<link rel="stylesheet" href="style.css">', '<style>\n' + css + '\n</style>')
+for name in ['data.js', 'assets/charts.js', 'app.js']:
+    html = html.replace('<script src="' + name + '"></script>', '<script>\n' + (source / name).read_text() + '\n</script>')
+licenses = '\n\n'.join((source / 'assets' / name).read_text() for name in ['LICENSE-taste-skill.txt', 'OFL-public-sans.txt'])
+html = html.replace('</head>', '<!-- Bundled component licenses:\n' + licenses + '\n-->\n</head>')
 output = ROOT / "artifacts" / "still-prototype.html"
 output.parent.mkdir(exist_ok=True)
+html = '\n'.join(line.rstrip() for line in html.splitlines()) + '\n'
 output.write_text(html)
 (ROOT / 'dist').mkdir(exist_ok=True)
 (ROOT / 'dist' / 'index.html').write_text(html)

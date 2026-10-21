@@ -1,6 +1,6 @@
 {
-  "functionalChecks": "passed",
-  "responsiveWidths": [
+  "status": "passed",
+  "viewports": [
     1440,
     1024,
     768,
@@ -9,10 +9,28 @@
   ],
   "consoleErrors": [],
   "externalRequests": [],
-  "localHandlerTimingMs": {
-    "handlerP50": 0.8000000000465661,
-    "handlerP95": 1.1999999999534339,
+  "filterHandlerMs": {
+    "p50": 1.2000000001862645,
+    "p95": 1.5,
     "samples": 50
   },
-  "limits": "Synthetic eight-holding fixture. Handler timings exclude browser paint and are not production performance guarantees. Direct file:// navigation is blocked by environment browser policy; standalone HTML was tested over loopback HTTP. Application authentication and live integrations are not implemented."
+  "coverage": [
+    "full-width instrument tabs",
+    "no stock or research dialogs",
+    "persistent search after scroll",
+    "discovery filter synchronization",
+    "watchlist persistence",
+    "stock tab persistence and close",
+    "history back/forward",
+    "research subtabs",
+    "adjustable scenarios and zero",
+    "source calculations",
+    "unsafe unsupported input",
+    "pointer and keyboard split resizing",
+    "collapse and restore",
+    "keyboard tab navigation",
+    "phone stock and research flows",
+    "self-contained packaged output"
+  ],
+  "limits": "Synthetic eight-position fixture. Handler timings exclude paint and are not production benchmarks. No IBKR integration, app auth or live AI. Hosted access is separate from application authentication."
 }
