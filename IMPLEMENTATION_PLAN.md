@@ -4,6 +4,8 @@ Research date: 21 October 2026. Current status: stage 0 interactive prototype co
 
 The reviewed UI now uses persistent page and stock tabs, in-page research, visible search and an adjustable instrument/main split. This supersedes the original drawer-based prototype. IBKR integration, application authentication and live AI remain unimplemented.
 
+IBKR component update: the official Flex v3 retrieval client and offline XML envelope validator are implemented under `ibkr/`, with 20 passing offline tests. Real-account access, financial-field normalization/reconciliation, application authentication and UI integration are still pending. The current environment has no broker secret bindings or IBKR egress grant. See `docs/IBKR_SETUP.md` for the official path and setup.
+
 Private prototype: https://still-investing-workspace.anshulraj.chatgpt.site . The hosting platform enforces owner-only access. Application-level authentication is not implemented; see AUTH_DECISION.md before connecting real data.
 
 ## Decision

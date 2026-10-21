@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Entirely synthetic transport fixture. Not an actual brokerage statement. -->
+<FlexQueryResponse queryName="Still synthetic transport test" type="AF">
+  <FlexStatements count="1">
+    <FlexStatement accountId="SYNTHETIC-ACCOUNT" fromDate="20261001" toDate="20261020" period="Custom">
+      <OpenPositions>
+        <OpenPosition accountId="SYNTHETIC-ACCOUNT" currency="USD" symbol="MSFT" conid="272093" position="80" markPrice="521.38" costBasisPrice="437.50" positionValue="41710.40" levelOfDetail="SUMMARY" />
+      </OpenPositions>
+    </FlexStatement>
+  </FlexStatements>
+</FlexQueryResponse>

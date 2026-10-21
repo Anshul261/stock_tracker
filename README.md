@@ -39,3 +39,11 @@ All historical charts and prices are illustrative. Monetary position totals use 
 `tests/test_prototype.py` uses Python Playwright and Chromium for functional and responsive browser tests. It checks independent numeric expectations, search, filters, sorting, scenario calculations, watchlist persistence, dialogs, unsupported input, network isolation, console errors and representative viewports. Test tools are development-only and do not ship with the prototype. Run the HTTP server first, then `python tests/test_prototype.py`.
 
 Review `AUTH_DECISION.md` before connecting real financial data. See `IMPLEMENTATION_PLAN.md` and `PRODUCT_BRIEF.md` for the staged product plan.
+
+## IBKR reporting client
+
+The first broker component now follows the official **Flex Web Service v3** reporting path. It is a local Python client, separate from the hosted synthetic UI. See [IBKR setup](docs/IBKR_SETUP.md) for official sources, Portal configuration, hidden token entry, network requirements and Windows/Linux commands.
+
+Install with `python -m pip install --require-hashes -r requirements-ibkr.txt`, then use `python -m ibkr inspect <export.xml>` to validate an exported report offline, or `python -m ibkr fetch --query-id <id>` to request one (the token is prompted invisibly). A hosted worker can use secure environment bindings instead. No credentials have been configured and no live IBKR call has been validated here.
+
+The client retrieves/validates the report envelope; normalizing and reconciling its financial fields remains a separate implementation gate. It does not wire private holdings into the demo UI or provide application sign-in. Run the offline contract/security suite with `python -m unittest discover -s tests -p test_ibkr_flex.py -v` after installing the pinned dependency.

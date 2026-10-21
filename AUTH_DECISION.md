@@ -2,6 +2,8 @@
 
 Reviewed 21 October 2026. Authentication is not implemented in this prototype.
 
+IBKR reporting update: a separate local Flex Web Service client now accepts a reporting token through hidden interactive entry or the `IBKR_FLEX_TOKEN` secret binding, plus a Query ID. This is broker-report authentication only. No token is configured, no live connection is verified, and the hosted UI still has no application data/backend authentication. See `docs/IBKR_SETUP.md`.
+
 The deployed demo at https://still-investing-workspace.anshulraj.chatgpt.site uses the hosting platform's owner-only access gate. This is separate from application-level authentication. No WorkOS account is required to view that private preview; use the owning ChatGPT account.
 
 ## Prototype
