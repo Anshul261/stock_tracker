@@ -1,0 +1,18 @@
+{
+  "functionalChecks": "passed",
+  "responsiveWidths": [
+    1440,
+    1024,
+    768,
+    390,
+    320
+  ],
+  "consoleErrors": [],
+  "externalRequests": [],
+  "localHandlerTimingMs": {
+    "handlerP50": 0.8000000000465661,
+    "handlerP95": 1.1999999999534339,
+    "samples": 50
+  },
+  "limits": "Synthetic eight-holding fixture. Handler timings exclude browser paint and are not production performance guarantees. Direct file:// navigation is blocked by environment browser policy; standalone HTML was tested over loopback HTTP. Application authentication and live integrations are not implemented."
+}

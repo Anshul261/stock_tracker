@@ -1,0 +1,11 @@
+__pycache__/
+.venv/
+node_modules/
+.env
+.env.*
+!.env.example
+private-data/
+imports/
+backups/
+playwright-report/
+test-results/
