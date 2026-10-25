@@ -10,7 +10,7 @@
   "consoleErrors": [],
   "externalRequests": [],
   "filterHandlerMs": {
-    "p50": 1.099999999627471,
+    "p50": 1.199999999254942,
     "p95": 1.400000000372529,
     "samples": 50
   },

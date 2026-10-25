@@ -73,3 +73,9 @@ Later inputs: a user-generated Activity Flex export for reconciliation, preferre
 - OpenBB provider documentation: https://docs.openbb.co/odp/v4/python/extensions/providers
 - SEC EDGAR API documentation: https://www.sec.gov/search-filings/edgar-application-programming-interfaces
 - Jev official documentation: https://docs.typesafe.ai/introduction
+
+## News milestone — 25 October 2026
+
+Implemented: independent loopback web server; public feed adapters for Fed/SEC/BLS; explicit SearXNG, Brave and Tavily search; post-filtered finance-domain results; timestamps/staleness; caches and process attempt caps; full-page News and stock News section. Static Sites preview retains source links and external finance searches, with an explicit backend-needed state.
+
+Next: smoke-test real feeds and one selected provider with allowed egress and the user's own account; validate freshness/coverage against user needs; deploy a production backend with owner authentication, managed secrets, shared quotas and no account data in logs. Company-specific EDGAR/IR feeds can follow after these basic contracts are verified. No full-text redistribution or AI sentiment pipeline is enabled.

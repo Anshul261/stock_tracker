@@ -1,0 +1,79 @@
+/* Public source catalog; generated from news/sources.json. */
+window.StillNewsSources = {
+  "reviewedOn": "2026-10-25",
+  "feeds": [
+    {
+      "id": "fed",
+      "name": "Federal Reserve",
+      "category": "Monetary policy",
+      "url": "https://www.federalreserve.gov/feeds/press_all.xml",
+      "homepage": "https://www.federalreserve.gov/newsevents/pressreleases.htm",
+      "documentation": "https://www.federalreserve.gov/feeds/feeds.htm",
+      "domains": [
+        "federalreserve.gov"
+      ]
+    },
+    {
+      "id": "sec",
+      "name": "SEC",
+      "category": "Regulation",
+      "url": "https://www.sec.gov/news/pressreleases.rss",
+      "homepage": "https://www.sec.gov/newsroom/press-releases",
+      "documentation": "https://www.sec.gov/about/rss-feeds",
+      "domains": [
+        "sec.gov"
+      ]
+    },
+    {
+      "id": "bls",
+      "name": "Bureau of Labor Statistics",
+      "category": "Economic data",
+      "url": "https://www.bls.gov/feed/bls_latest.rss",
+      "homepage": "https://www.bls.gov/",
+      "documentation": "https://www.bls.gov/help/hlp_rss.htm",
+      "domains": [
+        "bls.gov"
+      ]
+    }
+  ],
+  "searchDomains": [
+    "reuters.com",
+    "ft.com",
+    "wsj.com",
+    "bloomberg.com",
+    "cnbc.com",
+    "marketwatch.com",
+    "sec.gov",
+    "federalreserve.gov",
+    "bls.gov",
+    "ecb.europa.eu",
+    "investor.nvidia.com",
+    "microsoft.com",
+    "investor.apple.com",
+    "ir.aboutamazon.com",
+    "abc.xyz",
+    "investor.tsmc.com",
+    "investor.costco.com",
+    "investor.vanguard.com"
+  ],
+  "providers": [
+    {
+      "id": "searxng",
+      "name": "SearXNG",
+      "url": "https://docs.searxng.org/dev/search_api.html",
+      "note": "Open source; run your own instance with JSON enabled. Hosting and upstream engine limits still apply."
+    },
+    {
+      "id": "brave",
+      "name": "Brave Search",
+      "url": "https://brave.com/search/api/",
+      "note": "Hosted search with limited free credits; account and API key required. Check current plan and spending limits."
+    },
+    {
+      "id": "tavily",
+      "name": "Tavily",
+      "url": "https://www.tavily.com/pricing",
+      "note": "Lists 1,000 free monthly credits, no card required. Basic search costs one credit; terms may change."
+    }
+  ]
+};

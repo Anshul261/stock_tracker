@@ -36,3 +36,7 @@ Official sources:
 Settings → IBKR connection shows the actual disconnected state and links to official setup and disable-access instructions. Settings → Data & privacy describes current storage and the owner-only preview. No token form, browser credential storage, sync scheduler, credential deletion or imported-data deletion is implemented. No disconnect button is shown for a connection that does not exist.
 
 IBKR-wide Flex disabling is a Client Portal action, not an app-side API call. A future authenticated backend must implement app-scoped pause, credential removal and separate imported-data deletion before presenting those controls as working. Broker-wide disabling cannot erase previously retrieved reports.
+
+## Standalone news service (25 October 2026)
+
+`serve.py` runs without ChatGPT identity or APIs and binds to loopback only. Its API accepts public news/search inputs, not broker tokens or account data. Search keys are server-only environment bindings or entered at a hidden startup prompt and held in process memory. Host/Origin checks and the static asset allowlist reduce cross-site/local-file exposure; they are not a substitute for authentication on a public server. The static hosted preview does not run this Python service. See `docs/NEWS_SOURCES.md` before production hosting.
