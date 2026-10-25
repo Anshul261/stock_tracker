@@ -5,6 +5,7 @@ identifier is logged. The response's `url` field is deliberately ignored.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -26,6 +27,7 @@ BASE_URL = "https://ndcdyn.interactivebrokers.com/AccountManagement/FlexWebServi
 MAX_REPORT_BYTES = 32 * 1024 * 1024
 ENDPOINTS = frozenset({"SendRequest", "GetStatement"})
 MIN_REQUEST_INTERVAL = 7.0  # Conservative: fewer than 10 requests per 60 seconds.
+MAX_RANGE_DAYS = 365
 
 
 class FlexError(Exception):
@@ -157,6 +159,11 @@ def _date_range(from_date: str | None, to_date: str | None) -> dict[str, str]:
             raise FlexError("The report date is invalid.") from None
     if from_date > to_date:
         raise FlexError("The report start date must not follow its end date.")
+    # IBKR documents a 365-day maximum for the period parameter; apply the same
+    # bound to explicit ranges and import longer histories as several reports.
+    span = datetime.strptime(to_date, "%Y%m%d") - datetime.strptime(from_date, "%Y%m%d")
+    if span.days + 1 > MAX_RANGE_DAYS:
+        raise FlexError(f"Request at most {MAX_RANGE_DAYS} days per report; split longer histories.")
     return {"fd": from_date, "td": to_date}
 
 
@@ -221,6 +228,28 @@ class FlexClient:
                 error = FlexServiceError(result.findtext("ErrorCode", "unknown"))
                 if error.code not in PENDING_CODES:
                     raise error
+
+
+@contextmanager
+def single_worker(directory: Path):
+    """Hold an exclusive lock so two local processes never share a token's
+    1/second, 10/minute limit without sharing the limiter. POSIX only; on
+    other systems run one sync process at a time yourself."""
+    try:
+        import fcntl
+    except ImportError:
+        yield
+        return
+    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    fd = os.open(directory / ".flex-worker.lock", os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise FlexError("Another Flex retrieval is running; wait for it to finish.") from None
+        yield
+    finally:
+        os.close(fd)
 
 
 def save_report(report: FlexReport, output: Path) -> None:

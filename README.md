@@ -9,9 +9,11 @@ Private preview: https://still-investing-workspace.anshulraj.chatgpt.site (owner
 For the independent web app with news APIs (Python 3.10+):
 
 ```sh
-python -m pip install --require-hashes -r requirements-ibkr.txt
-python serve.py
+uv sync
+uv run python serve.py
 ```
+
+Without uv, `python -m pip install --require-hashes -r requirements-ibkr.txt` then `python serve.py` still works.
 
 Use a virtual environment; Windows/macOS/Linux steps and provider setup are in [news setup](docs/NEWS_SOURCES.md). A UI-only static preview can still use `python -m http.server 4173 --bind 127.0.0.1 --directory prototype`; it cannot run the news APIs.
 
@@ -25,7 +27,7 @@ The current prototype follows the user's single-screen sketch: a thin navigation
 
 The split can be resized by pointer or with Left/Right, Home and End while the separator is focused. The layout button hides or restores the instrument list. Phones use the full main canvas and labeled bottom navigation.
 
-Visual direction and the vendored SVG chart helper come from [taste-skill](https://github.com/Leonxlnx/taste-skill), MIT, upstream commit `6010f91a9935f1c167dfc500fb1a475681892e6b`. Public Sans is bundled from the official Google Fonts repository under SIL OFL. Both licenses ship with the source and standalone HTML. The chart helper has one local lifecycle change to disconnect old resize observers when switching tabs.
+Visual direction and the vendored SVG chart helper come from [taste-skill](https://github.com/Leonxlnx/taste-skill), MIT, upstream commit `6010f91a9935f1c167dfc500fb1a475681892e6b`. Public Sans is bundled from the official Google Fonts repository under SIL OFL. Both licenses ship with the source and standalone HTML. The chart helper has two local changes: it disconnects old resize observers when switching tabs, and it escapes every label and series name it writes as HTML.
 
 ## Try
 
@@ -41,7 +43,7 @@ All historical charts and prices are illustrative. Monetary position totals use 
 
 ## Verification
 
-`tests/test_prototype.py` uses Python Playwright and Chromium for functional and responsive browser tests. It checks independent numeric expectations, search, filters, sorting, scenario calculations, watchlist persistence, dialogs, unsupported input, network isolation, console errors and representative viewports. Test tools are development-only and do not ship with the prototype. Run the HTTP server first, then `python tests/test_prototype.py`.
+`tests/test_prototype.py` uses Python Playwright and Chromium for functional and responsive browser tests. It checks independent numeric expectations, search, filters, sorting, scenario calculations, watchlist persistence, dialogs, unsupported input, network isolation, console errors and representative viewports. Test tools are development-only and do not ship with the prototype. Run the HTTP server first, then `uv run python tests/test_prototype.py`. `tests/test_ui_escaping.py` serves hostile names, symbols and sectors in place of `data.js` and checks they render as text; set `STILL_CHROMIUM` if Chromium is not at `/usr/bin/chromium`.
 
 Review `AUTH_DECISION.md` before connecting real financial data. See `IMPLEMENTATION_PLAN.md` and `PRODUCT_BRIEF.md` for the staged product plan.
 
@@ -49,9 +51,9 @@ Review `AUTH_DECISION.md` before connecting real financial data. See `IMPLEMENTA
 
 The first broker component now follows the official **Flex Web Service v3** reporting path. It is a local Python client, separate from the hosted synthetic UI. See [IBKR setup](docs/IBKR_SETUP.md) for official sources, Portal configuration, hidden token entry, network requirements and Windows/Linux commands.
 
-Install with `python -m pip install --require-hashes -r requirements-ibkr.txt`, then use `python -m ibkr inspect <export.xml>` to validate an exported report offline, or `python -m ibkr fetch --query-id <id>` to request one (the token is prompted invisibly). A hosted worker can use secure environment bindings instead. No credentials have been configured and no live IBKR call has been validated here.
+Install with `uv sync`, then use `uv run python -m ibkr inspect <export.xml>` to validate an exported report offline, or `uv run python -m ibkr fetch --query-id <id>` to request one (the token is prompted invisibly). A hosted worker can use secure environment bindings instead. No credentials have been configured and no live IBKR call has been validated here.
 
-The client retrieves/validates the report envelope; normalizing and reconciling its financial fields remains a separate implementation gate. It does not wire private holdings into the demo UI or provide application sign-in. Run the offline contract/security suite with `python -m unittest discover -s tests -p test_ibkr_flex.py -v` after installing the pinned dependency.
+`uv run python -m ibkr ledger <export.xml> [--from-inception] [--details]` normalizes a saved report into a Decimal ledger and reconciles positions, cash, quantities and FIFO cost basis, printing counts only unless `--details` is given. Checks that the report cannot settle are marked unverified, never passed. It has been run on synthetic reports only. It does not wire private holdings into the demo UI or provide application sign-in. Run the offline suites with `uv run python -m unittest discover -s tests -p 'test_ibkr_*.py' -v`. Use Flex only for your own accounts; see [staying within IBKR's Flex rules](docs/IBKR_SETUP.md#staying-within-ibkrs-flex-rules) before any multi-user hosting.
 
 ## Independent news web app
 

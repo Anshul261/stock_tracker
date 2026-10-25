@@ -48,7 +48,15 @@ py -m venv .venv
 .\.venv\Scripts\python -m ibkr fetch --query-id YOUR_QUERY_ID --output private-data\ibkr\first-report.xml
 ```
 
-On Linux/macOS:
+With [uv](https://docs.astral.sh/uv/) (any OS; `uv sync` installs the pinned dependency from `uv.lock`):
+
+```sh
+uv sync
+uv run python -m ibkr inspect /path/to/your-export.xml
+uv run python -m ibkr fetch --query-id YOUR_QUERY_ID --output private-data/ibkr/first-report.xml
+```
+
+On Linux/macOS without uv:
 
 ```sh
 python3 -m venv .venv
@@ -76,15 +84,73 @@ The returned `<url>` is ignored, as IBKR instructs. Only the fixed official `ndc
 
 HTTP/network/service errors omit URLs, tokens, raw broker messages and report contents. XML DTDs and entities are forbidden with pinned `defusedxml`. Response size is capped at 32 MiB. Report generation is not automatically retried after an ambiguous network failure.
 
-This is a retrieval client and offline envelope validator, **not** a reconciled portfolio importer or a hosted backend. It does not validate every financial field, calculate live returns or establish application authentication. No order, cancellation or transfer API exists in it.
+This is a retrieval client and offline envelope validator, not a hosted backend. It does not calculate live returns or establish application authentication. No order, cancellation or transfer API exists in it.
+
+## Ledger and reconciliation (offline)
+
+`ibkr/ledger.py` turns a saved Activity Flex XML report into typed records: trades, cash transactions, open positions (summary and lots), per-currency cash balances, splits and conversion rates. Money is `Decimal` in its reported currency. `ibkr/reconcile.py` then checks the ledger against itself:
+
+| Check | What must hold |
+| --- | --- |
+| `position_value` | quantity × mark price × multiplier = reported position value, within the mark price's rounding |
+| `trade_net_cash` | proceeds + taxes + commission = IBKR's net cash |
+| `quantity` | opening + trades + splits = closing quantity, per IBKR contract ID |
+| `cash` | starting cash + trades + commissions + cash transactions + corporate-action cash = ending cash, per currency (FX conversions move both currencies) |
+| `cost_basis` | FIFO lots rebuilt from the trades (fees included, splits applied) = reported cost basis |
+| `realized_pnl` | FIFO realized profit on each sale = IBKR's `fifoPnlRealized`, when the field is included |
+
+Each check passes, fails or is **unverified**. Unverified means the inputs cannot settle it: the opening holdings are unknown, the report has transfers or option exercises (not modeled yet), a corporate action other than a split occurred, or commissions were charged in another currency. Unverified is never counted as a pass.
+
+Run it locally; by default it prints counts only, with no symbols, amounts or account identifiers:
+
+```sh
+uv run python -m ibkr ledger private-data/ibkr/first-report.xml
+uv run python -m ibkr ledger private-data/ibkr/2025.xml private-data/ibkr/2026.xml --from-inception --details
+```
+
+Pass `--from-inception` only when the reports start at the account's opening, so opening positions are zero; otherwise quantity and cost-basis checks stay unverified. Several reports for one account are merged: exact repeats are dropped, so reimports are idempotent; a reused transaction ID with different content is refused for review; a gap between periods is refused. `--details` lists each non-passing check with symbols and amounts. The exit status is 2 when any check fails.
+
+Import rules that keep the ledger honest:
+
+- Include `transactionID` for trades and cash transactions; rows without it are refused rather than guessed at.
+- Configure dates as `yyyyMMdd` or `yyyy-MM-dd` (date/time `yyyyMMdd;HHmmss`). Ambiguous formats such as `MM/dd/yyyy` are refused. Times are kept as reported, without assuming a time zone.
+- Trades use EXECUTION rows; ORDER, summary and closed-lot rows are skipped so nothing is double counted. Cash transactions need Detail level.
+- Account Information is read only for the base currency. Name, addresses, date of birth and email are never retained. Ledger representations mask account IDs.
+- Broker text such as descriptions is stripped of control characters and kept as literal text. The UI escapes it when rendering.
+- Unrecognized cash types are kept in the cash rollforward and flagged for review rather than dropped.
+
+Cost basis assumes FIFO, IBKR's default tax-lot method. If your account uses another method, `cost_basis` can fail even though IBKR is right. `tests/fixtures/synthetic-activity.xml` is a synthetic report of the prototype's demo portfolio; the tests reconcile it from inception and against `prototype/data.js`.
+
+## Staying within IBKR's Flex rules
+
+Checked on 26 October 2026 against IBKR's Web API documentation (the `.md` versions of the pages below).
+
+| IBKR documents | How this client follows it |
+| --- | --- |
+| `SendRequest` is limited to 1 request per second and 10 per minute per token; error 1018 when exceeded | Requests are at least 7 seconds apart within a client. The CLI holds an exclusive lock (POSIX) so two local processes cannot share a token's limit. 1018 waits rather than generating another report |
+| Use version 3 | Every request sends `v=3` |
+| Ignore the `<url>` returned by `SendRequest` | The field is never read; only the fixed `ndcdyn.interactivebrokers.com` host is used and redirects are refused |
+| The period parameter covers at most 365 days | Explicit `--from-date/--to-date` ranges are capped at 365 days too (our conservative assumption; IBKR does not state a limit for `fd`/`td`). Import longer histories as several reports and merge them |
+| Tokens last 6 hours to 1 year, can be IP-restricted, and generating a new one invalidates the old one | Setup recommends the shortest practical validity and IP restriction where the sync host is stable. Expiry (1012), IP rejection (1013), invalid token (1015) and too many failed attempts (1025) stop immediately without retrying |
+| A token can retrieve data for all linked accounts included in a query | The token is treated as account-wide. IBKR's protocol puts it in the request URL, so it travels only over verified HTTPS to IBKR. It is never logged, printed, accepted as a command-line option, stored in the browser or passed to AI tools |
+
+What we did not find: the Flex pages describe the service as the account holder's way to retrieve their own reports, and say nothing about sharing a token with someone else's service. IBKR's third-party integration pages route portfolio and reporting vendors through its **Reporting Integration** team rather than through customer Flex tokens.
+
+The rule for this product follows from that:
+
+- **Supported:** you run Still for your own accounts, with your own token, on a machine you control. This is the documented use.
+- **Not supported without IBKR's agreement:** a hosted, multi-user service where customers paste Flex tokens into Still's servers. Before building that, contact IBKR's Reporting Integration team (see the third-party integration link below) and confirm the permitted route, data use and any redistribution limits.
+- **Market data:** mark prices in a Flex report are IBKR's. Showing them to the account owner is what the report is for. We have not reviewed terms that would allow redistributing them to anyone else, so don't.
 
 ## Current readiness
 
 - Offline client/security contract tests: 20 passed, using synthetic fixtures and fake transport.
+- Offline ledger/reconciliation tests: 31 passed, covering partial sales, splits, currency conversion, reimports, malformed fields and privacy (`uv run python -m unittest discover -s tests -p 'test_ibkr_*.py'`).
 - Real account connection: not verified; no token/query ID is configured in this environment.
 - Managed environment egress: the enforced allowlist does not currently include `ndcdyn.interactivebrokers.com`; enable that exact HTTPS destination through environment configuration before a live test here. No denied connection was attempted or bypassed.
 - Hosted page: remains the synthetic-data prototype. No broker credential or private report is deployed to it.
-- Next gate: validate a real report locally, normalize the ledger with explicit currency/detail handling, reconcile positions/cash/cost basis to IBKR, then connect an owner-authorized application data route. Keep synthetic histories out of real-account views.
+- Real-report reconciliation: not done. The ledger has only seen synthetic reports; field names follow IBKR's Activity Flex conventions but need confirming against your export.
+- Next gate: run `ibkr ledger` on a real export, resolve any fail or unverified checks (transfers and non-split corporate actions are the expected gaps), then connect an owner-authorized application data route. Keep synthetic histories out of real-account views.
 
 ## Connection settings in the app
 
@@ -104,6 +170,8 @@ App-only pause, disconnect (remove its saved credential) and imported-data delet
 - Parameter reference: https://www.interactivebrokers.com/docs/web-api/api-reference/send-request
 - Retrieval: https://www.interactivebrokers.com/docs/web-api/flex-web-service/using-flex-web-service/retrieve-the-report
 - Error codes: https://www.interactivebrokers.com/docs/web-api/flex-web-service/error-codes
+- Third-party reporting integration: https://www.interactivebrokers.com/en/trading/third-party-integration.php
+- Third-party connection list and Reporting Integration note: https://www.interactivebrokers.com/docs/third-party-integrations/available-integrations
 - Query field reference: https://www.ibkrguides.com/reportingreference/reportguide/activity%20flex%20query%20reference.htm
 - Gateway reauthentication: https://www.interactivebrokers.com/docs/web-api/authentication/cpgw/client-portal-gateway-faq
 - OAuth 2.0 eligibility: https://www.interactivebrokers.com/docs/web-api/authentication/oauth-2/introduction

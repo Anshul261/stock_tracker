@@ -1,0 +1,17 @@
+[project]
+name = "still"
+version = "0.1.0"
+description = "Still: a personal investing workspace with an official, read-only IBKR Flex reporting client."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    # Official upstream: https://github.com/tiran/defusedxml . XML hardening only.
+    "defusedxml==0.7.1",
+]
+
+[dependency-groups]
+# Browser regression tests only; never shipped with the app.
+dev = ["playwright>=1.47"]
+
+[tool.uv]
+package = false

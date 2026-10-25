@@ -5,7 +5,9 @@ import os
 from pathlib import Path
 import sys
 
-from .flex import FlexClient, FlexError, MAX_REPORT_BYTES, save_report, validate_report
+from .flex import FlexClient, FlexError, MAX_REPORT_BYTES, save_report, single_worker, validate_report
+from .ledger import merge, parse_ledger
+from .reconcile import reconcile
 
 
 def main(argv=None) -> int:
@@ -18,8 +20,34 @@ def main(argv=None) -> int:
     fetch.add_argument("--to-date", help="Optional last date, YYYYMMDD. Requires --from-date.")
     inspect = commands.add_parser("inspect", help="Validate an already exported XML report, offline.")
     inspect.add_argument("path", type=Path)
+    ledger = commands.add_parser("ledger", help="Normalize and reconcile exported XML reports, offline.")
+    ledger.add_argument("paths", type=Path, nargs="+", help="One or more Activity Flex XML reports; overlaps are merged.")
+    ledger.add_argument("--from-inception", action="store_true",
+                        help="The reports cover the account since it opened, so opening positions are zero.")
+    ledger.add_argument("--details", action="store_true",
+                        help="Print each non-passing check with symbols and amounts. Off by default.")
     args = parser.parse_args(argv)
     try:
+        if args.command == "ledger":
+            reports = []
+            for path in args.paths:
+                with path.open("rb") as handle:
+                    reports.append(parse_ledger(handle.read(MAX_REPORT_BYTES + 1)))
+            combined = merge(*reports)
+            result = reconcile(combined, from_inception=args.from_inception)
+            summary, counts = combined.summary(), result.counts()
+            print("Ledger: " + ", ".join(f"{n} {k.replace('_', ' ')}" for k, n in summary.items()) + ".")
+            print(f"Reconciliation: {counts['pass']} passed, {counts['fail']} failed, {counts['unverified']} unverified.")
+            for notice in dict.fromkeys(n for s in combined.statements for n in s.notices):
+                print("Review: " + notice)
+            if args.details:
+                for check in result.checks:
+                    if check.status != "pass":
+                        print(f"{check.status:<10} {check.name:<24} {check.subject:<14} "
+                              f"expected {check.expected} actual {check.actual} {check.detail}".rstrip())
+            elif counts["fail"] or counts["unverified"]:
+                print("Run with --details to list them, including symbols and amounts.")
+            return 0 if result.ok else 2
         if args.command == "inspect":
             with args.path.open("rb") as handle:
                 report = validate_report(handle.read(MAX_REPORT_BYTES + 1))
@@ -35,8 +63,9 @@ def main(argv=None) -> int:
                 raise FlexError("No Flex token configured. Use a secure IBKR_FLEX_TOKEN binding or run interactively for a hidden prompt.")
             token = getpass.getpass("IBKR Flex reporting token (hidden): ")
         client = FlexClient(token, args.query_id)
-        report = client.fetch(args.from_date, args.to_date)
-        save_report(report, args.output)
+        with single_worker(args.output.parent):
+            report = client.fetch(args.from_date, args.to_date)
+            save_report(report, args.output)
         print(f"Saved a private XML report: {report.statement_count} statement(s). No account data printed.")
         return 0
     except FlexError as error:
