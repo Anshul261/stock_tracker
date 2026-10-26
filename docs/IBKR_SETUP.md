@@ -16,7 +16,7 @@ Flex supplies reporting snapshots. It is not the app's live price feed. Before d
 2. Go to **Reporting → Flex Queries**.
 3. Create an **Activity Flex Query**, selecting only the intended account(s), with **XML** output. Choose the desired reporting period in Portal. For the first reconciliation, a completed reporting day is preferable to an incomplete current day.
 4. Include the relevant sections below. Keep instrument identifiers, currencies, dates, detail levels and transaction identifiers. Preserve both summary balances and transaction-level history; do not reconstruct cost basis from an incomplete recent trade list.
-5. Run/download the XML once through Portal to confirm the report exists and has the intended sections. The CLI can validate its envelope offline.
+5. Run/download the XML once through Portal to confirm the report exists and has the intended sections. You can upload that file in Still to check it.
 6. Use the query's information button to obtain its **Query ID**.
 7. Open **Flex Web Service Configuration**, enable the service and generate a token. IBKR documents validity from 6 hours to 1 year and optional IP restrictions. Use the shortest practical validity; only restrict by IP when the sync host's outbound IP is known and stable.
 
@@ -37,39 +37,39 @@ The token may retrieve reporting data for linked accounts depending on query/acc
 
 Use IBKR's Activity Flex Query Reference to confirm exact fields and available names for your account/query configuration. These are importer requirements, not proof that all exported sections have already been normalized by this client.
 
-## Run locally without exposing the token in a command
+## Connect in the app
 
-From the project folder, on Windows PowerShell:
+Open Still and go to **Settings → IBKR connection**. The page walks through the same steps as above, then:
 
-```powershell
-py -m venv .venv
-.\.venv\Scripts\python -m pip install --require-hashes -r requirements-ibkr.txt
-.\.venv\Scripts\python -m ibkr inspect path\to\your-export.xml
-.\.venv\Scripts\python -m ibkr fetch --query-id YOUR_QUERY_ID --output private-data\ibkr\first-report.xml
-```
+1. **Connect.** Paste the Query ID and Flex token, plus the token's expiry date if you want a reminder. Still encrypts both on this computer, never shows the token again, and sends it only to `ndcdyn.interactivebrokers.com` over verified HTTPS.
+2. **Import.**
+   - **Sync now:** the first sync uses the period set in your query. Later syncs fetch every completed day since your latest report, so gaps never appear.
+   - **Import history from a date:** fetched as consecutive ranges of at most 365 days, a few seconds apart.
+   - **Upload:** an XML report you downloaded from Client Portal. This needs no token.
+3. **Reconciliation.** Shows passed, failed and unverified checks, with the reason for each one that didn't pass. Tick *My imported reports start when the account opened* only when that's true; quantity and cost-basis checks need it.
+4. **Daily sync.** Runs once a day after the time you choose, while Still is open and unlocked.
+5. **Stop access.**
+   - **Disconnect:** forgets the token and Query ID and turns the schedule off.
+   - **Delete imported data:** removes the stored reports.
+   - IBKR's own switch-off steps are linked from the same section.
 
-With [uv](https://docs.astral.sh/uv/) (any OS; `uv sync` installs the pinned dependency from `uv.lock`):
+Progress, IBKR's error codes (for example an expired token or an IP restriction) and the sync history all appear on the same page. Nothing about the token or the report contents is logged.
+
+## Developer command line
+
+The app needs none of this. These commands remain for debugging a report outside the app.
 
 ```sh
 uv sync
 uv run python -m ibkr inspect /path/to/your-export.xml
+uv run python -m ibkr ledger /path/to/your-export.xml --from-inception --details
 uv run python -m ibkr fetch --query-id YOUR_QUERY_ID --output private-data/ibkr/first-report.xml
 ```
 
-On Linux/macOS without uv:
-
-```sh
-python3 -m venv .venv
-.venv/bin/python -m pip install --require-hashes -r requirements-ibkr.txt
-.venv/bin/python -m ibkr inspect /path/to/your-export.xml
-.venv/bin/python -m ibkr fetch --query-id YOUR_QUERY_ID --output private-data/ibkr/first-report.xml
-```
-
-Replace `YOUR_QUERY_ID` with the numeric ID from Portal. Interactive fetch prompts for the Flex token with input hidden. There is deliberately no `--token` command-line option. A server/secret manager can instead supply `IBKR_FLEX_TOKEN` and `IBKR_FLEX_QUERY_ID`; the program does not load `.env` automatically. Never paste the token into chat.
-
-Optional range override: supply both `--from-date YYYYMMDD` and `--to-date YYYYMMDD`. IBKR's reference documents the date parameters; report availability still depends on IBKR and the account. This client does not promise unlimited historical retrieval. Omit both to use the template's configured period.
-
-The file is created only after validating the XML report envelope. Existing files are never overwritten. Output defaults to Git-ignored `private-data/ibkr/report.xml`. On POSIX, new report files use 0600 and new output directories 0700. On Windows, use a private user directory and confirm its inherited NTFS permissions. Inspection prints counts only, not account identifiers or positions.
+- **Token handling:** `fetch` prompts for the token with input hidden. There is deliberately no `--token` option. `IBKR_FLEX_TOKEN` and `IBKR_FLEX_QUERY_ID` can come from a secret manager, and `.env` files are not loaded.
+- **Date range:** `--from-date` and `--to-date` (YYYYMMDD) must be given together and cover at most 365 days.
+- **Output file:** it is created only after the report validates, it is never overwritten, and it is private to your user (0600).
+- **`ledger` output:** counts only, unless you pass `--details`.
 
 ## Implemented boundary
 
@@ -101,14 +101,10 @@ This is a retrieval client and offline envelope validator, not a hosted backend.
 
 Each check passes, fails or is **unverified**. Unverified means the inputs cannot settle it: the opening holdings are unknown, the report has transfers or option exercises (not modeled yet), a corporate action other than a split occurred, or commissions were charged in another currency. Unverified is never counted as a pass.
 
-Run it locally; by default it prints counts only, with no symbols, amounts or account identifiers:
-
-```sh
-uv run python -m ibkr ledger private-data/ibkr/first-report.xml
-uv run python -m ibkr ledger private-data/ibkr/2025.xml private-data/ibkr/2026.xml --from-inception --details
-```
-
-Pass `--from-inception` only when the reports start at the account's opening, so opening positions are zero; otherwise quantity and cost-basis checks stay unverified. Several reports for one account are merged: exact repeats are dropped, so reimports are idempotent; a reused transaction ID with different content is refused for review; a gap between periods is refused. `--details` lists each non-passing check with symbols and amounts. The exit status is 2 when any check fails.
+The app runs this after every sync and upload and shows the result in Settings → IBKR connection. Several reports for one account are merged:
+- Exact repeats are dropped, so reimports are idempotent.
+- A reused transaction ID with different content is refused for review.
+- A report that would leave a gap between periods is refused before it is stored.
 
 Import rules that keep the ledger honest:
 
@@ -139,26 +135,27 @@ What we did not find: the Flex pages describe the service as the account holder'
 The rule for this product follows from that:
 
 - **Supported:** you run Still for your own accounts, with your own token, on a machine you control. This is the documented use.
+- **Selling Still as installable software:** probably the same footing, though we found no IBKR statement on it. Each customer would install Still and connect their own token on their own computer. The seller never receives tokens or report data. Have counsel review the licence and marketing before selling. Avoid personalized trade recommendations (investment-adviser territory), don't imply IBKR endorsement or use its brand, and don't redistribute IBKR prices.
 - **Not supported without IBKR's agreement:** a hosted, multi-user service where customers paste Flex tokens into Still's servers. Before building that, contact IBKR's Reporting Integration team (see the third-party integration link below) and confirm the permitted route, data use and any redistribution limits.
 - **Market data:** mark prices in a Flex report are IBKR's. Showing them to the account owner is what the report is for. We have not reviewed terms that would allow redistributing them to anyone else, so don't.
 
 ## Current readiness
 
-- Offline client/security contract tests: 20 passed, using synthetic fixtures and fake transport.
-- Offline ledger/reconciliation tests: 31 passed, covering partial sales, splits, currency conversion, reimports, malformed fields and privacy (`uv run python -m unittest discover -s tests -p 'test_ibkr_*.py'`).
-- Real account connection: not verified; no token/query ID is configured in this environment.
-- Managed environment egress: the enforced allowlist does not currently include `ndcdyn.interactivebrokers.com`; enable that exact HTTPS destination through environment configuration before a live test here. No denied connection was attempted or bypassed.
-- Hosted page: remains the synthetic-data prototype. No broker credential or private report is deployed to it.
-- Real-report reconciliation: not done. The ledger has only seen synthetic reports; field names follow IBKR's Activity Flex conventions but need confirming against your export.
-- Next gate: run `ibkr ledger` on a real export, resolve any fail or unverified checks (transfers and non-split corporate actions are the expected gaps), then connect an owner-authorized application data route. Keep synthetic histories out of real-account views.
+- **Offline tests:** client and security 20, ledger and reconciliation 31, app 23 (vault, sign-in, API guards, sync worker with a fake IBKR transport, portfolio view). All pass.
+- **In-app flow:** checked end to end in Chrome with synthetic reports:
+  - setup
+  - upload
+  - reconciliation (33 of 33 checks pass from inception)
+  - Portfolio, Discover and Research on imported data
+  - a second report (day-over-day change and history)
+  - lock and unlock, passphrase change
+  - search key storage, CSV export, deleting data, reset and quit
+- **Live IBKR sync:** not verified. No real token or Query ID was used. Run Sync now with your own account to complete this.
+- **Real-report reconciliation:** not done. Field names follow IBKR's Activity Flex conventions but need confirming against your export. Transfers and corporate actions other than splits show as unverified.
 
-## Connection settings in the app
+## Switching Flex off at IBKR
 
-Open `#settings/ibkr` for current status, setup steps, and official stop-access instructions. The hosted prototype remains disconnected and deliberately has no token-entry form. The local client described above is separate from this UI.
-
-To disable future Flex retrieval globally, use Client Portal → Reporting → Flex Queries → Flex Web Service Configuration, switch the service off, and save. This affects other Flex consumers too and does not delete reports already retrieved. The official guide documents this Portal control; we have not found a documented remote disable/revoke endpoint.
-
-App-only pause, disconnect (remove its saved credential) and imported-data deletion belong to the future owner-authorized backend. Do not substitute localStorage flags for stopping a server sync worker or deleting server data.
+To stop all Flex retrieval for your account, use Client Portal → Reporting → Flex Queries → Flex Web Service Configuration, switch the service off and save. This affects every tool that uses your Flex access. It does not delete reports Still has already imported; delete those in Settings. We have not found a documented remote revoke endpoint, so Still cannot do this for you.
 
 ## Official sources
 

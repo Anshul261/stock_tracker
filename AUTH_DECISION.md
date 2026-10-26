@@ -1,42 +1,47 @@
 # Authentication decision
 
-Reviewed 21 October 2026. Authentication is not implemented in this prototype.
+Updated 26 October 2026. Still is a local app with one owner, protected by a passphrase. This replaces the earlier prototype note, which recorded that the app had no authentication.
 
-IBKR reporting update: a separate local Flex Web Service client now accepts a reporting token through hidden interactive entry or the `IBKR_FLEX_TOKEN` secret binding, plus a Query ID. This is broker-report authentication only. No token is configured, no live connection is verified, and the hosted UI still has no application data/backend authentication. See `docs/IBKR_SETUP.md`.
+## Design
 
-The deployed demo at https://still-investing-workspace.anshulraj.chatgpt.site uses the hosting platform's owner-only access gate. This is separate from application-level authentication. No WorkOS account is required to view that private preview; use the owning ChatGPT account.
+- **Where it runs:** the server binds to `127.0.0.1` only. The launcher opens it in the owner's browser. Nothing listens on the network.
+- **First run:** the owner sets a passphrase of at least 12 characters.
+- **Encryption:**
+  - scrypt (n=2^15, r=8, p=1, random salt) derives a key from the passphrase.
+  - That key wraps a random 256-bit data key with AES-GCM.
+  - The data key encrypts the IBKR token, the Query ID, search keys and every imported report, each sealed with a purpose label so ciphertexts can't be swapped.
+  - Duplicate reports are detected with a keyed HMAC, not a plain hash.
+- **Changing the passphrase** re-wraps the data key; the data itself is not re-encrypted. There is no recovery. *Reset Still* deletes everything Still saved and starts setup again.
+- **Unlocking:** a correct passphrase keeps the data key in memory until the owner chooses *Lock now* or quits. This is what lets the daily sync run unattended. Repeated failures back off exponentially, up to 5 minutes.
+- **Sessions:**
+  - A random 256-bit session token, held in server memory and sent as an `HttpOnly; SameSite=Strict; Path=/` cookie.
+  - Idle sessions expire after the owner's chosen time (30 minutes by default). After that the passphrase is needed again, but the data key stays loaded for background syncs.
+  - The cookie has no `Secure` flag because the app is served over http on loopback.
+- **Request checks:**
+  - Every API route except session, setup, sign-in and reset needs a valid session.
+  - Requests that change anything must carry `X-Still-Request: 1`.
+  - Requests are refused when they come from a foreign `Origin`, have an unexpected `Host` (DNS rebinding), or arrive cross-site via `Sec-Fetch-Site`.
+  - Opening the page itself from a link elsewhere is allowed.
+- **Reset without signing in:** this route exists for a forgotten passphrase. It still needs the custom header and the typed confirmation `RESET`. Any process running as the same user could delete Still's files anyway, so the route adds no new exposure.
+- **Storage:**
+  - SQLite in the per-user data folder: directory 0700, database 0600. On Windows, the profile's inherited permissions apply.
+  - Plain settings (sync time, auto-lock, demo or IBKR mode) are not secret and are stored unencrypted.
+  - Nothing sensitive is logged; the server logs no requests at all.
 
-## Prototype
+## What this does not cover
 
-The UI runs entirely in the browser with synthetic data. No brokerage connection, credentials, real holdings, hosted model calls, third-party scripts, telemetry, remote fonts or market-data requests are present. Watchlist preferences and instrument panel width are stored in localStorage; open tabs use sessionStorage. The portable HTML can be opened offline. The local HTTP preview binds to 127.0.0.1; that is a development boundary, not an authentication system.
+- **Other software running as the same user.** It can read Still's memory while the app is unlocked, or install a keylogger. Use the operating system's account security.
+- **Remote or multi-user access.** It is deliberately out of scope. Exposing the server through a tunnel or reverse proxy would skip TLS and the host checks; don't do it.
+- **A hosted service.** It would need real identity (for example WorkOS AuthKit, or the hosting platform's sign-in), TLS, server-side secret management, per-user data separation and IBKR's agreement for collecting customer tokens. See [docs/IBKR_SETUP.md](docs/IBKR_SETUP.md#staying-within-ibkrs-flex-rules).
 
-No external authentication service is required for this bounded local demonstration. Do not upload real account exports or deploy the prototype as a real portfolio service.
+The earlier static preview at https://still-investing-workspace.anshulraj.chatgpt.site has no server, so it shows demo data only and offers no credential forms.
 
-## Real portfolio application
+## Tests
 
-Before a hosted/private-network release handles real financial data, implement server-enforced authentication and owner authorization on every data route. Authenticate the owner, then explicitly allow only the enrolled owner identity. Successful sign-in alone must not grant other users access. Disable open registration where supported and reject all non-owner identities regardless.
-
-For the current Sites deployment, preserve the platform-owned sign-in integration. Its server-side identity helpers and trusted visitor headers should verify the owner on every private data route; do not add a second identity provider by default. WorkOS AuthKit remains an option if the app moves to hosting that requires separate sign-in, session handling and MFA. Use its official SDK for the chosen server stack; keep API keys and session secrets server-side; use Secure, HttpOnly cookies, appropriate SameSite settings and CSRF protections for mutations. Validate sessions on the server, support logout/expiry, and test unauthorized and non-owner requests. Keep broker credentials behind the ingestion boundary, independently of app authentication.
-
-WorkOS project provisioning, secrets and redirect URIs are not set up. A private deployment destination and the owner's identity must be established before integration. No WorkOS signup, subscription or provisioning was performed.
-
-## auth.md distinction
-
-WorkOS's auth.md is an open agent-registration protocol describing how agents can register users and obtain scoped credentials. It composes with OAuth; it does not by itself provide application login or owner-only authorization. This personal application does not need agent registration at the prototype stage. The linked site is documentation, not an instruction to execute a registration flow.
-
-Official sources:
-
-- https://workos.com/auth-md
-- https://workos.com/docs
-- https://workos.com/docs/authkit/sessions
-- https://github.com/workos/next-authkit-example
-
-## In-app connection settings
-
-Settings → IBKR connection shows the actual disconnected state and links to official setup and disable-access instructions. Settings → Data & privacy describes current storage and the owner-only preview. No token form, browser credential storage, sync scheduler, credential deletion or imported-data deletion is implemented. No disconnect button is shown for a connection that does not exist.
-
-IBKR-wide Flex disabling is a Client Portal action, not an app-side API call. A future authenticated backend must implement app-scoped pause, credential removal and separate imported-data deletion before presenting those controls as working. Broker-wide disabling cannot erase previously retrieved reports.
-
-## Standalone news service (25 October 2026)
-
-`serve.py` runs without ChatGPT identity or APIs and binds to loopback only. Its API accepts public news/search inputs, not broker tokens or account data. Search keys are server-only environment bindings or entered at a hidden startup prompt and held in process memory. Host/Origin checks and the static asset allowlist reduce cross-site/local-file exposure; they are not a substitute for authentication on a public server. The static hosted preview does not run this Python service. See `docs/NEWS_SOURCES.md` before production hosting.
+`tests/test_app.py` checks the following:
+- vault round trips, a wrong passphrase, tampering and passphrase change
+- file permissions, and no plaintext secrets on disk
+- session expiry, lock and backoff
+- every private route returns 401 without a session
+- the header, Origin, Host and cross-site checks
+- reset

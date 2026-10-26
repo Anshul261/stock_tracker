@@ -123,7 +123,7 @@ def reconcile_statement(s: Statement, *, from_inception: bool = False,
             checks.append(Check("quantity", subject, "unverified", detail="A corporate action that is not a split affects this instrument."))
         elif known_opening is None:
             checks.append(Check("quantity", subject, "unverified", None, closing.get(conid, ZERO),
-                                "Opening position unknown; pass from_inception or opening quantities."))
+                                "Starting quantity unknown: the reports may not begin when the account opened."))
         else:
             checks.append(_compare("quantity", subject, known_opening.get(conid, ZERO) + flows[conid],
                                    closing.get(conid, ZERO), ZERO, doubt))

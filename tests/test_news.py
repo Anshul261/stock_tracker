@@ -10,7 +10,8 @@ from urllib.request import Request, urlopen
 
 from news.service import (CATALOG, MAX_BYTES, NewsService, NewsError, NoRedirect,
                           approved_url, parse_feed, timestamp, fetch_bytes)
-from serve import create_server
+from tempfile import TemporaryDirectory
+from still.server import App, create_server
 
 FEED=b'''<rss><channel><item><title>Policy &amp; rates</title><link>https://www.federalreserve.gov/releases/policy.htm?utm_source=rss</link><pubDate>Fri, 23 Oct 2026 12:00:00 GMT</pubDate></item><item><title>Duplicate</title><link>https://www.federalreserve.gov/releases/policy.htm</link></item><item><title>Bad link</title><link>https://federalreserve.gov.evil.test/a</link></item><item><title>Unsafe</title><link>javascript:alert(1)</link></item></channel></rss>'''
 ATOM=b'''<feed xmlns="http://www.w3.org/2005/Atom"><entry><title>&lt;img src=x onerror=alert(1)&gt;Economic release</title><link href="https://www.bls.gov/news.release/x.htm"/><published>2026-10-23T12:00:00Z</published></entry></feed>'''
@@ -140,13 +141,20 @@ class ServiceTests(unittest.TestCase):
 class HTTPTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.server=create_server(0,NewsService(lambda *a,**k:FEED,env={}))
+        cls.folder=TemporaryDirectory()
+        cls.server=create_server(0,App(Path(cls.folder.name),news=NewsService(lambda *a,**k:FEED,env={})))
         cls.base=f'http://127.0.0.1:{cls.server.server_port}'
         cls.thread=threading.Thread(target=cls.server.serve_forever,daemon=True);cls.thread.start()
+        # News routes need a signed-in owner, like every other data route.
+        setup=urlopen(Request(cls.base+'/api/setup',data=b'{"passphrase":"synthetic test passphrase","mode":"demo"}',
+                              headers={'Content-Type':'application/json','X-Still-Request':'1'}),timeout=10)
+        cls.cookie=setup.headers['Set-Cookie'].split(';')[0]
     @classmethod
-    def tearDownClass(cls):cls.server.shutdown();cls.server.server_close();cls.thread.join()
-    def status(self,path,**kw):
-        try:return urlopen(Request(self.base+path,**kw),timeout=3)
+    def tearDownClass(cls):
+        cls.server.shutdown();cls.server.server_close();cls.thread.join();cls.server.app.store.close();cls.folder.cleanup()
+    def status(self,path,headers=None,**kw):
+        headers={'Cookie':self.cookie,'X-Still-Request':'1',**(headers or {})}
+        try:return urlopen(Request(self.base+path,headers=headers,**kw),timeout=3)
         except HTTPError as e:return e
     def test_static_only_allowlist_and_headers(self):
         response=self.status('/')
@@ -159,6 +167,7 @@ class HTTPTests(unittest.TestCase):
         self.assertEqual(self.status('/api/news/config',headers={'Host':'evil.example'}).status,403)
         self.assertEqual(self.status('/api/news/config',headers={'Origin':'https://evil.example'}).status,403)
         self.assertEqual(self.status('/api/news/config',headers={'Sec-Fetch-Site':'cross-site'}).status,403)
+        self.assertEqual(self.status('/api/news/config',headers={'Cookie':''}).status,401)
     def test_search_shape_size_and_type(self):
         self.assertEqual(self.status('/api/news/search',data=b'{}').status,415)
         for payload in (b'[]',b'{"query":"x","holdings":"private"}',b'a'*2049):

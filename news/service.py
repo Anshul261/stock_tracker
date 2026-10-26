@@ -147,7 +147,8 @@ def search_query(value):
 class NewsService:
     def __init__(self, transport=fetch_bytes, clock=time.monotonic, env=None):
         self.transport, self.clock = transport, clock
-        self.env = dict(os.environ if env is None else env)
+        # A provided mapping is read live, so settings saved in the app apply without a restart.
+        self.env = dict(os.environ) if env is None else env
         self.feed_lock, self.search_lock = threading.Lock(), threading.Lock()
         self.feed_cache, self.search_cache = None, OrderedDict()
         self.last_attempt, self.last_search = float('-inf'), float('-inf')

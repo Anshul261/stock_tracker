@@ -1,6 +1,6 @@
 # Private stock research workspace
 
-Research date: 21 October 2026. Current status: stage 0 interactive prototype complete and privately deployed; no brokerage account connected. Browser checks passed at widths 320, 390, 768, 1024 and 1440. The prototype uses synthetic data and deterministic research templates; production performance budgets and accessibility audit remain pending.
+Research date: 21 October 2026. Current status (26 October 2026): local app with in-app setup, encrypted storage and IBKR import; see the local product milestone below. No live IBKR account has been connected yet. Browser checks passed at widths 320, 390, 768, 1024 and 1440. The prototype uses synthetic data and deterministic research templates; production performance budgets and accessibility audit remain pending.
 
 The reviewed UI now uses persistent page and stock tabs, in-page research, visible search and an adjustable instrument/main split. This supersedes the original drawer-based prototype. IBKR integration, application authentication and live AI remain unimplemented.
 
@@ -79,3 +79,20 @@ Later inputs: a user-generated Activity Flex export for reconciliation, preferre
 Implemented: independent loopback web server; public feed adapters for Fed/SEC/BLS; explicit SearXNG, Brave and Tavily search; post-filtered finance-domain results; timestamps/staleness; caches and process attempt caps; full-page News and stock News section. Static Sites preview retains source links and external finance searches, with an explicit backend-needed state.
 
 Next: smoke-test real feeds and one selected provider with allowed egress and the user's own account; validate freshness/coverage against user needs; deploy a production backend with owner authentication, managed secrets, shared quotas and no account data in logs. Company-specific EDGAR/IR feeds can follow after these basic contracts are verified. No full-text redistribution or AI sentiment pipeline is enabled.
+
+## Local product milestone — 26 October 2026
+
+Implemented: Still now runs as a local app (`python -m still`, or the launchers in `launchers/`) with everything set up in the UI:
+- **Access:** first-run passphrase, unlock screen, lock, auto-lock, passphrase change, reset and quit.
+- **Storage:** an encrypted vault for the IBKR token, Query ID, search keys and reports.
+- **IBKR connection in Settings:** credentials, Sync now, chunked history import, upload, daily schedule, reconciliation review, sync history, disconnect and delete data.
+- **Search providers in Settings.**
+- **Workspace views:** Portfolio, Discover and Research render imported IBKR data (base-currency values, report dates, change since the previous report, report-date history, trade history per holding), with demo data clearly separated.
+- **Tests:** 23 new offline tests cover the vault, sign-in, API guards, the sync worker (fake IBKR transport) and the portfolio view.
+- **Manual check:** the in-app flow was checked end to end in Chrome with synthetic reports.
+
+Next:
+1. Run a live sync and reconciliation with the owner's own IBKR export, and fix field-name or section differences.
+2. Model transfers and non-split corporate actions.
+3. Package single-file installers before any distribution.
+4. Have counsel review terms before selling (see `docs/IBKR_SETUP.md`).

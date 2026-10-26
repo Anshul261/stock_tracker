@@ -10,17 +10,13 @@
     { symbol:'TSM', name:'Taiwan Semiconductor', legalName:'Taiwan Semiconductor ADR', sector:'Semiconductors', exchange:'NYSE', qty:70, cost:193.80, price:244.80, previous:240.35, seed:67 },
     { symbol:'COST', name:'Costco', legalName:'Costco Wholesale Corporation', sector:'Consumer staples', exchange:'NASDAQ', qty:18, cost:905.30, price:962.40, previous:966.10, seed:79 },
   ];
-  const cents = value => Math.round(value*100);
-  const positionValue = h => h.qty*cents(h.price)/100;
-  const purchaseValue = h => h.qty*cents(h.cost)/100;
-  const positionGain = h => (h.qty*(cents(h.price)-cents(h.cost)))/100;
-  const positionDay = h => h.qty*(cents(h.price)-cents(h.previous))/100;
-  const totalCents = positions.reduce((s,h)=>s+h.qty*cents(h.price),0);
-  const basisCents = positions.reduce((s,h)=>s+h.qty*cents(h.cost),0);
   const cashCents = 1482050;
-  const account = { value:(totalCents+cashCents)/100, cash:cashCents/100, invested:totalCents/100, basis:basisCents/100, gain:(totalCents-basisCents)/100, day:positions.reduce((s,h)=>s+h.qty*(cents(h.price)-cents(h.previous)),0)/100, date:'2026-10-21', purchaseDate:'2026-01-06' };
-  console.assert(cents(account.value)===totalCents+cashCents,'Holdings plus cash must equal account value');
+  const demo = window.StillModel.build({live:false, currency:'USD', asOf:'2026-10-21', firstPurchase:'2026-01-06',
+    positions:positions.map(p=>({...p, currency:'USD'})), cash:cashCents/100});
+  const {account, cents} = demo;
+  console.assert(cents(account.value)===cents(account.invested)+cashCents,'Holdings plus cash must equal account value');
   console.assert(cents(account.invested-account.basis)===cents(account.gain),'Gain reconciles to cost');
-  console.assert(positions.every(h=>h.qty>0&&h.cost>0&&h.price>0),'Positive prices and share counts');
-  window.StillData = Object.freeze({positions:positions.map(Object.freeze), account:Object.freeze(account), cents, positionValue, purchaseValue, positionGain, positionDay});
+  console.assert(demo.positions.every(h=>h.qty>0&&h.cost>0&&h.price>0),'Positive prices and share counts');
+  window.StillDemo = demo;
+  window.StillData = demo;
 })();

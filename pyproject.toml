@@ -5,6 +5,8 @@ description = "Still: a personal investing workspace with an official, read-only
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    # Official upstream: https://github.com/pyca/cryptography . AES-GCM for the local vault only.
+    "cryptography==50.0.2",
     # Official upstream: https://github.com/tiran/defusedxml . XML hardening only.
     "defusedxml==0.7.1",
 ]
