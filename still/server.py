@@ -31,7 +31,9 @@ from .sync import Sync, SyncError
 ROOT = Path(__file__).resolve().parents[1] / "prototype"
 ASSETS = {"/": "index.html", "/index.html": "index.html", **{"/" + p: p for p in (
     "style.css", "data.js", "model.js", "boot.js", "gate.js", "settings.js", "app.js", "news.js", "news-sources.js",
-    "assets/charts.js", "assets/public-sans.ttf")}}
+    "assets/charts.js", "assets/public-sans.ttf", "assets/guide/menu.webp", "assets/guide/flex-queries.webp",
+    "assets/guide/sections.webp", "assets/guide/delivery.webp", "assets/guide/review.webp", "assets/guide/query-id.webp",
+    "assets/guide/token.webp")}}
 CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; "
        "img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 SEARCH_SECRETS = {"searxng": "search.searxng", "brave": "search.brave", "tavily": "search.tavily"}
@@ -453,7 +455,8 @@ class Handler(BaseHTTPRequestHandler):
         if path in ASSETS:
             file = ROOT / ASSETS[path]
             if file.is_file():
-                return self.reply(200, file.read_bytes(), mimetypes.guess_type(str(file))[0] or "application/octet-stream")
+                kind = "image/webp" if file.suffix == ".webp" else mimetypes.guess_type(str(file))[0]
+                return self.reply(200, file.read_bytes(), kind or "application/octet-stream")
         self.reply(404, {"error": "Not found."})
 
     def do_POST(self):

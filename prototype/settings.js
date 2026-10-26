@@ -8,6 +8,7 @@
   const when = iso => { if (!iso) return 'Never'; const d = new Date(iso.length === 10 ? iso + 'T00:00:00Z' : iso); return Number.isNaN(d.getTime()) ? '—' : new Intl.DateTimeFormat('en-GB', iso.length === 10 ? {day:'numeric', month:'short', year:'numeric', timeZone:'UTC'} : {day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'}).format(d); };
   const portalUrl = 'https://www.interactivebrokers.com/sso/Login';
   const flexGuideUrl = 'https://www.ibkrguides.com/advisorportal/ug/flex-web-service.htm';
+  const flexQueriesDocs = 'https://www.ibkrguides.com/clientportal/performanceandstatements/activityflex.htm';
   const tokenDocs = 'https://www.interactivebrokers.com/docs/web-api/flex-web-service/client-portal-configuration/enable-and-create-access-token';
   const CHECKS = {position_value:'Position value', trade_net_cash:'Trade net cash', quantity:'Quantity roll-forward', cash:'Cash roll-forward',
     cost_basis:'Cost basis (FIFO)', realized_pnl:'Realized profit'};
@@ -56,6 +57,34 @@
     const steps = j.steps > 1 ? ` · step ${j.step} of ${j.steps}` : '';
     return `<div class="sync-progress ${j.done ? (j.ok ? 'ok' : 'failed') : 'running'}" role="status"><strong>${esc(j.done ? j.message : j.stage + '…')}</strong>${j.done ? '' : `<span>${esc(steps)} IBKR can take a minute to prepare a report.</span>`}</div>`;
   }
+  // Current Client Portal steps (checked against IBKR's guides, October 2026). Screenshots are the
+  // owner's own, with the account number blacked out; numbered boxes match the step numbers.
+  const GUIDE = [
+    {title: 'Open Flex Queries', body: 'Sign in to Client Portal and choose <strong>Performance &amp; Reports → Flex Queries</strong>. (Also under <strong>Menu → Reporting → Flex Queries</strong>.)',
+      figures: [['assets/guide/menu.webp', 'Performance & Reports menu with Flex Queries highlighted', 259, 380]]},
+    {title: 'Create an Activity Flex Query', body: 'In the <strong>Activity Flex Query</strong> panel, click <strong>+</strong> in its top-right corner. Name the query, for example <em>Still</em>. Skip “Configure with AI”.',
+      figures: [['assets/guide/flex-queries.webp', 'Flex Queries page with the Activity Flex Query plus button and the Flex Web Service gear highlighted', 1220, 600]]},
+    {title: 'Choose these sections, not all of them', body: `<p>Under <strong>Sections</strong>, select:</p>
+      <ul class="guide-sections"><li><b>a</b> Account Information</li><li><b>b</b> Cash Report</li><li><b>c</b> Cash Transactions</li><li><b>d</b> Corporate Actions</li><li><b>e</b> Open Positions</li><li><b>f</b> Trades</li><li><b>g</b> Transfers</li></ul>
+      <p>Each one opens a list of fields. For <strong>Account Information</strong>, tick only <strong>Account ID</strong> and <strong>Currency</strong>; Still needs nothing else there, and leaving out your name, address and date of birth keeps them out of the report. For the others, choose <strong>Select All</strong>. Then click <strong>Save</strong>. Where a section offers a level of detail, pick <strong>Summary</strong> for Open Positions, <strong>Execution</strong> for Trades and <strong>Detail</strong> for Cash Transactions.</p>
+      <p>Transfers is recommended: Still doesn’t calculate with it yet, but it lets reconciliation say “unverified” instead of reporting a false mismatch when shares moved in from another broker. If you trade options, also add <strong>Option Exercises, Assignments and Expirations</strong> for the same reason. Still doesn’t use the other sections, so leave them off.</p>`,
+      figures: [['assets/guide/sections.webp', 'Flex query section list with the seven sections Still needs highlighted', 866, 896]]},
+    {title: 'Set delivery and format, then create', body: `<p>Under <strong>Delivery Configuration</strong>, check that your account is selected, then set <b class="guide-key">a</b> <strong>Format: XML</strong> and <b class="guide-key">b</b> <strong>Period: Last 365 Calendar Days</strong>.</p>
+      <p>Under <strong>General Configuration</strong> set <b class="guide-key">c</b> <strong>Date Format: yyyyMMdd</strong>, <b class="guide-key">d</b> <strong>Time Format: HHmmss</strong> and <b class="guide-key">e</b> <strong>Date/Time Separator: ; (semi-colon)</strong>. Still reads only these formats. Set <b class="guide-key">f</b> <strong>Include Currency Rates?</strong> to <strong>Yes</strong>; Still uses the rates to convert cash and holdings in other currencies to your base currency. Leave the other options at their defaults (<strong>No</strong>).</p>
+      <p>Click <strong>Continue</strong>, check the summary, and click <b class="guide-key">g</b> <strong>Create</strong>. IBKR confirms that the query has been saved; click <strong>Ok</strong>.</p>`,
+      figures: [['assets/guide/delivery.webp', 'Delivery and General Configuration with Format, Period, date and time formats, separator and Include Currency Rates highlighted', 878, 682],
+                ['assets/guide/review.webp', 'Review screen with the Create button highlighted', 980, 539]]},
+    {title: 'Copy the Query ID', body: 'Back on <strong>Flex Queries</strong>, your new query is listed under Activity Flex Query. Click the <strong>info (i)</strong> icon to its left. The <strong>Query ID</strong> is the number at the top of the pop-up, usually 6–7 digits. It belongs to the query, not the token, so it isn’t on the Flex Web Service screen. Copy it into <strong>2. Connect</strong> below.',
+      figures: [['assets/guide/query-id.webp', 'Flex Queries list with the info icon next to the saved query and the Flex Web Service gear highlighted', 1120, 576]]},
+    {title: 'Turn on Flex Web Service and copy the token', body: 'In <strong>Flex Web Service Configuration</strong>, click the <strong>gear</strong>. Switch the service on; the status then reads <strong>Enabled</strong> and a token appears. To choose how long it lasts and, optionally, the only IP address allowed to use it, click <strong>Generate A New Token</strong>; a new token cancels the old one. Paste the token below and note its expiry date for the reminder. This screen shows only the token; the Query ID comes from the info (i) icon in step 5.',
+      figures: [['assets/guide/token.webp', 'Flex Web Service Configuration with the gear and the Enabled status highlighted', 523, 477]]},
+  ];
+  function guide(configured) {
+    return `<section class="settings-block"><h2>1. Prepare Flex in IBKR</h2><div><details class="settings-guide" ${configured ? '' : 'open'}><summary>Create the report and token in Client Portal (about 5 minutes)</summary>
+      <p class="field-hint">Screenshots are from IBKR Client Portal in October 2026, with the account number hidden. Numbered boxes match the steps; lettered boxes match the lists.</p>
+      <ol class="guide-steps">${GUIDE.map(step => `<li><h3>${step.title}</h3>${step.body.startsWith('<p>') ? step.body : `<p>${step.body}</p>`}${(step.figures || []).map(([src, alt, w, h]) => `<figure class="guide-figure" style="max-width:${Math.min(640, w)}px"><a href="${src}" target="_blank" rel="noopener"><img src="${src}" alt="${esc(alt)}" width="${w}" height="${h}" loading="lazy"></a><figcaption>Your screen may differ slightly. Select the image to enlarge it.</figcaption></figure>`).join('')}</li>`).join('')}</ol>
+      <div class="settings-actions">${link(portalUrl, 'Open IBKR Client Portal', 'button')}${link(tokenDocs, 'IBKR’s token guide')}${link(flexQueriesDocs, 'IBKR’s Flex Query guide')}</div></details></div></section>`;
+  }
   function ibkr(s, ctx) {
     const [tone, label] = status(s);
     const configured = s.tokenSaved && s.queryIdSaved;
@@ -65,13 +94,7 @@
     return `<section class="broker-summary" aria-labelledby="broker-name"><div><p class="broker-label">Reporting connection</p><h2 id="broker-name">Interactive Brokers</h2><p>Your reports through IBKR’s official Flex Web Service. Read-only: Flex cannot place orders, move money or change your account.</p></div><span class="broker-status ${tone}"><span class="connection-dot ${tone}"></span>${esc(label)}</span></section>
     <dl class="connection-facts"><div><dt>Data in this workspace</dt><dd>${ctx.mode !== 'ibkr' ? `Demo data${s.asOf ? ' (IBKR reports saved; switch in Data & privacy)' : ''}` : s.asOf ? `IBKR report of ${when(s.asOf)}` : 'Demo until a report is imported'}</dd></div><div><dt>Last successful import</dt><dd>${when(s.lastSuccess)}</dd></div><div><dt>Token</dt><dd>${s.tokenSaved ? `Saved ${when(s.tokenSavedAt)}${s.tokenExpires ? ` · expires ${when(s.tokenExpires)}` : ''}` : 'Not saved'}</dd></div></dl>
     ${expiryNote(s)}
-    <section class="settings-block"><h2>1. Prepare Flex in IBKR</h2><div><details class="settings-guide" ${configured ? '' : 'open'}><summary>Create the report and token in Client Portal</summary><ol>
-      <li>Sign in to Client Portal and open <strong>Reporting → Flex Queries</strong>.</li>
-      <li>Create an <strong>Activity Flex Query</strong> with <strong>XML</strong> output for your account. Include Account Information, Open Positions, Trades, Cash Report, Cash Transactions, Corporate Actions and Currency Conversion Rates. Keep transaction IDs.</li>
-      <li>Set the date format to <strong>yyyyMMdd</strong> and the period to <strong>Last 365 calendar days</strong> (or since your account opened if shorter).</li>
-      <li>Save it and copy its <strong>Query ID</strong> from the information button.</li>
-      <li>Open <strong>Flex Web Service Configuration</strong>, switch it on and generate a token. Choose the shortest validity you are comfortable renewing and note its expiry date.</li></ol>
-      <div class="settings-actions">${link(portalUrl, 'Open IBKR Client Portal', 'button')}${link(tokenDocs, 'IBKR’s token guide')}</div></details></div></section>
+    ${guide(configured)}
     <section class="settings-block"><h2>2. Connect</h2><div><form id="ibkr-credentials" class="settings-form" autocomplete="off">
       <label class="field"><span>Flex Query ID</span><input name="queryId" inputmode="numeric" pattern="[0-9]*" maxlength="32" placeholder="${s.queryIdSaved ? 'Saved — enter again to change' : 'e.g. 1234567'}" ${s.queryIdSaved ? '' : 'required'}></label>
       <label class="field"><span>Flex token</span><input name="token" type="password" maxlength="4096" autocomplete="off" placeholder="${s.tokenSaved ? 'Saved — leave blank to keep it' : 'Paste the token from Client Portal'}"></label>
