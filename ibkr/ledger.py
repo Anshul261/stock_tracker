@@ -245,6 +245,8 @@ class Statement:
     fx_rates: tuple[FxRate, ...] = ()
     unmodeled: tuple[str, ...] = ()   # Present sections not normalized yet.
     notices: tuple[str, ...] = ()     # Safe, value-free review notes.
+    base_cash: Decimal | None = None  # IBKR's own total of all cash, converted to the base currency.
+    nav: tuple[tuple[date, Decimal], ...] = ()  # Daily net asset value in base currency, when included.
 
     @property
     def label(self) -> str:
@@ -404,10 +406,12 @@ def _statement(element: ET.Element, index: int) -> Statement:
     if lots and not summary:
         raise LedgerError("OpenPositions: include Summary rows; lots alone are not reconciled.")
 
-    balances = []
+    balances, base_cash = [], None
     for row in _rows(element, "CashReport", "CashReportCurrency"):
-        # The BaseCurrency row is a converted total of the per-currency rows.
+        # The BaseCurrency row is IBKR's converted total of the per-currency rows. It is kept
+        # separately: it converts cash even when the report has no conversion rates.
         if row.element.get("levelOfDetail") == "BaseCurrency" or row.element.get("currency") == "BASE_SUMMARY":
+            base_cash = row.decimal("endingCash", required=False)
             continue
         balances.append(CashBalance(
             account=_account(row, account), currency=row.currency(),
@@ -420,6 +424,11 @@ def _statement(element: ET.Element, index: int) -> Statement:
     actions = [_corporate_action(r, account) for r in _rows(element, "CorporateActions", "CorporateAction")]
     if any(a.type not in SPLITS for a in actions):
         notices.append("CorporateActions: only splits are modeled; other actions need review.")
+
+    # "Net Asset Value (NAV) in Base": IBKR's total account value for each day of the period.
+    nav = {}
+    for row in _rows(element, "EquitySummaryInBase", "EquitySummaryByReportDateInBase"):
+        nav[row.day("reportDate")] = row.decimal("total")
 
     rates = []
     for row in _rows(element, "ConversionRates", "ConversionRate"):
@@ -435,7 +444,8 @@ def _statement(element: ET.Element, index: int) -> Statement:
         trades=_unique(trades, "Trades"), cash_transactions=_unique(cash, "CashTransactions"),
         positions=_unique(summary, "OpenPositions", key=lambda p: p.conid), lots=tuple(lots),
         cash_balances=tuple(balances), corporate_actions=_unique(actions, "CorporateActions"),
-        fx_rates=tuple(rates), unmodeled=unmodeled, notices=tuple(notices),
+        fx_rates=tuple(rates), unmodeled=unmodeled, notices=tuple(notices), base_cash=base_cash,
+        nav=tuple(sorted(nav.items())),
     )
 
 
@@ -483,6 +493,8 @@ def merge(*ledgers: Ledger) -> Ledger:
             corporate_actions=_unique([a for s in items for a in s.corporate_actions], "CorporateActions"),
             fx_rates=tuple(dict.fromkeys(r for s in items for r in s.fx_rates)),
             unmodeled=tuple(dict.fromkeys(u for s in items for u in s.unmodeled)),
-            notices=tuple(dict.fromkeys(n for s in items for n in s.notices)),
+            notices=tuple(dict.fromkeys(n for s in items for n in s.notices)), base_cash=latest.base_cash,
+            # Overlapping reports: the later report's value for a day wins.
+            nav=tuple(sorted({d: v for s in sorted(items, key=lambda s: s.to_date) for d, v in s.nav}.items())),
         ))
     return Ledger(tuple(merged))

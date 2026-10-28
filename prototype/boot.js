@@ -24,14 +24,16 @@
     try { session = await api('/api/session'); }
     catch { window.StillContext = {server:false}; return; }  // Offline file or static preview: demo only.
     if (!session.signedIn) { window.StillGate.show(session.state); return new Promise(()=>{}); }
-    const context = {server:true, mode:session.mode};
+    const context = {server:true, mode:session.mode, prices:false};
     if (session.mode === 'ibkr') {
       try {
         const result = await api('/api/portfolio');
+        context.prices = Boolean(result.prices);
         if (result.view) window.StillData = window.StillModel.fromServer(result.view);
         else { context.noData = true; context.viewError = result.error; }
       } catch (error) { context.noData = true; context.viewError = error.message; }
     }
+    else { try { context.prices = Boolean((await api('/api/prices/settings')).configured); } catch { /* prices stay off */ } }
     window.StillContext = context;
   })();
 })();

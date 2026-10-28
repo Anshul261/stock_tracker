@@ -28,7 +28,12 @@ A fast, considered personal investing workspace for your Interactive Brokers acc
 Portfolio, Discover and Research then show your imported holdings, with the report date in the status bar. Day-over-day change and value history appear once there are reports for two or more dates.
 
 **Other settings**
-- **News search:** a SearXNG address or a Brave or Tavily key, plus a per-run search limit.
+- **Prices:** your own free Alpaca API key. It adds:
+  - live quotes (IEX) for holdings and any company you open, refreshed every 30 seconds while Still is open
+  - daily price history from all US exchanges
+  - your portfolio's value for every trading day, rebuilt from your IBKR trades
+  - a time-weighted return compared with the S&P 500 (SPY), with deposits kept out of returns
+- **News & data:** a contact email for SEC (search every US-listed company and fund, read their filings), and a SearXNG address or a Brave or Tavily key for news search, plus a per-run search limit.
 - **Security:** auto-lock time, lock now, change passphrase, quit Still.
 - **Data & privacy:** where data is stored, export holdings as CSV, switch between IBKR and demo data, reset Still.
 
@@ -62,7 +67,12 @@ Visual direction and the vendored SVG chart helper come from [taste-skill](https
   - `ibkr/`: the Flex client, ledger and reconciliation.
   - `news/`: feeds and search.
   - `prototype/`: the browser UI.
-- **Offline tests:** `uv run python -m unittest discover -s tests -p 'test_[ai]*.py'` runs the app and IBKR suites, and `-p test_news.py` runs the news suite. They need no network, browser or credentials.
+- **Offline tests:** run `uv run python -m unittest discover -s tests -p PATTERN` with each of these patterns:
+  - `'test_[aic]*.py'`: app, IBKR and companies
+  - `test_prices.py`: prices
+  - `test_news.py`: news
+
+  They need no network, browser or credentials; SEC, Alpaca and IBKR are replaced by fakes.
 - **Browser scripts:** `tests/test_prototype.py`, `test_settings.py`, `test_news_ui.py` and `test_ui_escaping.py` run against the static demo preview. Start it with `uv run python -m http.server 4173 --bind 127.0.0.1 --directory prototype`. Set `STILL_CHROMIUM` to a Chromium binary.
 - **Command-line tools:** `python -m ibkr inspect | fetch | ledger` still exist for debugging; see [IBKR setup](docs/IBKR_SETUP.md#developer-command-line).
 - **Offline demo build:** `uv run python build_prototype.py` writes a demo-only standalone HTML file to `artifacts/still-prototype.html`.

@@ -177,7 +177,9 @@ class NewsService:
             previous = {s['id']:s for s in (self.feed_cache or {}).get('sources', [])}
             def one(source):
                 try:
-                    items = parse_feed(self.transport(source['url']), source)
+                    agent = self.env.get('STILL_NEWS_USER_AGENT')
+                    raw = self.transport(source['url'], headers={'User-Agent': agent}) if agent else self.transport(source['url'])
+                    items = parse_feed(raw, source)
                     return {'id':source['id'], 'name':source['name'], 'status':'ok', 'items':items,
                             'fetchedAt':utc_now(), '_success':now}
                 except Exception:

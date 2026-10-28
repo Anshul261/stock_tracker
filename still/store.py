@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS sync_runs (
 """
 DEFAULTS = {"mode": "demo", "autoLockMinutes": 30, "fromInception": False,
             "schedule": {"enabled": False, "time": "07:00"}, "lastScheduledRun": None,
-            "tokenSavedAt": None, "tokenExpires": None, "search": {"provider": None, "limit": 50}}
+            "tokenSavedAt": None, "tokenExpires": None, "search": {"provider": None, "limit": 50}, "secContact": None, "pricesSavedAt": None}
 
 
 def now() -> str:

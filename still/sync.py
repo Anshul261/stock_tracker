@@ -46,6 +46,7 @@ class Sync:
         self.job: dict | None = None
         self.thread: Thread | None = None
         self.view: dict | None = None
+        self.ledger = None
         self.view_error: str | None = None
         self.stopping = Event()
 
@@ -54,14 +55,16 @@ class Sync:
         key = self.auth.key
         with self.lock:
             if key is None:
-                self.view, self.view_error = None, None
+                self.view, self.view_error, self.ledger = None, None, None
                 return
             try:
-                self.view = portfolio.build(self.store.report_data(key),
-                                            from_inception=bool(self.store.setting("fromInception")))
+                reports = self.store.report_data(key)
+                self.view = portfolio.build(reports, from_inception=bool(self.store.setting("fromInception")))
+                # The merged ledger also feeds the price history, which rebuilds daily holdings from trades.
+                self.ledger = merge(*(parse_ledger(r) for r in reports)) if reports else None
                 self.view_error = None
             except (FlexError, portfolio.PortfolioError) as error:
-                self.view, self.view_error = None, str(error)
+                self.view, self.view_error, self.ledger = None, str(error), None
 
     # Import pipeline --------------------------------------------------------
     def import_report(self, data: bytes, source: str) -> dict:

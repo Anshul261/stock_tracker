@@ -1,7 +1,7 @@
 """Turn stored Flex reports into the portfolio view the workspace renders."""
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from ibkr.ledger import Ledger, Statement, merge, parse_ledger
@@ -59,8 +59,6 @@ def _snapshot(statements: list[Statement], base: str):
                 row["basis"] += p.cost_basis_money
         for b in s.cash_balances:
             cash[b.currency] = cash.get(b.currency, Decimal(0)) + b.ending
-            if b.currency not in rates:
-                missing_rates.add(b.currency)
     value = Decimal(0)
     rates = {}
     for s in statements:
@@ -68,10 +66,22 @@ def _snapshot(statements: list[Statement], base: str):
     for row in positions.values():
         if row["fx"] is not None:
             value += row["qty"] * row["p"].mark_price * row["p"].multiplier * row["fx"]
-    for currency, amount in cash.items():
-        if currency in rates:
-            value += amount * rates[currency]
-    return positions, cash, rates, value, missing_rates
+    unconverted = {c for c in cash if c not in rates}
+    totals = [s.base_cash for s in statements]
+    if unconverted and totals and all(t is not None for t in totals):
+        # No rate for some currency: use IBKR's own base-currency cash total instead.
+        cash_base = sum(totals, Decimal(0))
+    else:
+        cash_base = sum((a * rates[c] for c, a in cash.items() if c in rates), Decimal(0))
+        missing_rates |= unconverted
+    return positions, cash, rates, value + cash_base, missing_rates, cash_base
+
+
+def _trading_day(day: date) -> date:
+    """Weekend report dates carry Friday's prices; compare them as Friday."""
+    while day.weekday() >= 5:
+        day -= timedelta(days=1)
+    return day
 
 
 def _seed(conid: str) -> int:
@@ -86,7 +96,7 @@ def build(reports: list[bytes], *, from_inception: bool = False) -> dict | None:
     base = _base_currency(combined.statements)
     latest = list(combined.statements)
     as_of = max(s.to_date for s in latest)
-    positions, cash, rates, value, missing = _snapshot(latest, base)
+    positions, cash, rates, value, missing, cash_base = _snapshot(latest, base)
 
     # History: one point per report end date; the latest report for a date wins.
     by_date: dict[date, list[Statement]] = {}
@@ -97,14 +107,24 @@ def build(reports: list[bytes], *, from_inception: bool = False) -> dict | None:
     history, marks = [], {}
     previous_marks, previous_date = {}, None
     for day in sorted(by_date):
-        snap_positions, _, _, snap_value, snap_missing = _snapshot(by_date[day], base)
+        snap_positions, _, _, snap_value, snap_missing, _ = _snapshot(by_date[day], base)
         if not snap_missing:
             history.append({"date": day.isoformat(), "value": float(snap_value)})
         for conid, row in snap_positions.items():
             marks.setdefault(conid, []).append({"date": day.isoformat(), "price": float(row["p"].mark_price)})
-        if day < as_of:
+        if _trading_day(day) < _trading_day(as_of):
             previous_marks = {conid: row["p"].mark_price for conid, row in snap_positions.items()}
             previous_date = day.isoformat()
+
+    # Prefer IBKR's daily net asset value; fall back to one point per report.
+    nav: dict[date, Decimal] = {}
+    for s in latest:
+        for day, total in s.nav:
+            nav[day] = nav.get(day, Decimal(0)) + total
+    history_source = "reports"
+    if len(nav) >= 2:
+        history = [{"date": d.isoformat(), "value": float(v)} for d, v in sorted(nav.items())]
+        history_source = "nav"
 
     trades_by_conid: dict[str, list] = {}
     for s in latest:
@@ -130,6 +150,8 @@ def build(reports: list[bytes], *, from_inception: bool = False) -> dict | None:
             "seed": _seed(conid), "history": marks.get(conid, []), "trades": trades_by_conid.get(conid, []),
         })
     trades = [t for s in latest for t in s.trades if t.quantity > 0]
+    first_activity = min([t.trade_date for s in latest for t in s.trades] +
+                         [c.day for s in latest for c in s.cash_transactions], default=None)
     result = reconcile(combined, from_inception=from_inception)
     warnings = []
     if missing:
@@ -141,10 +163,12 @@ def build(reports: list[bytes], *, from_inception: bool = False) -> dict | None:
         "positions": rows,
         "cash": [{"currency": c, "amount": float(a), "base": float(a * rates[c]) if c in rates else None}
                  for c, a in sorted(cash.items())],
-        "cashBase": float(sum((a * rates[c] for c, a in cash.items() if c in rates), Decimal(0))),
+        "cashBase": float(cash_base),
         "value": float(value),
         "firstPurchase": min((t.trade_date for t in trades), default=min(s.from_date for s in latest)).isoformat(),
-        "history": history,
+        "coverageStart": min(s.from_date for s in latest).isoformat(),
+        "firstActivity": first_activity.isoformat() if first_activity else None,
+        "history": history, "historySource": history_source,
         "reconciliation": {
             "counts": result.counts(),
             "checks": [{"name": c.name, "subject": c.subject, "status": c.status,

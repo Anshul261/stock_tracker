@@ -237,6 +237,48 @@ class PortfolioTests(TestCase):
         self.assertIsNone(nvda["previous"])
         self.assertNotIn("Synthetic Person", json.dumps(view))
 
+    def eur_cash(self, base_summary=True):
+        x = ACTIVITY.replace(b'<CashReportCurrency accountId="SYNTHETIC-7" currency="USD"',
+                             b'<CashReportCurrency accountId="SYNTHETIC-7" currency="EUR" levelOfDetail="Currency" '
+                             b'startingCash="100" endingCash="100" />\n        '
+                             b'<CashReportCurrency accountId="SYNTHETIC-7" currency="USD"')
+        x = re.sub(rb'(currency="BASE_SUMMARY"[^>]*endingCash=")[\d.]+', rb'\g<1>14930.50', x)
+        if not base_summary:
+            x = re.sub(rb'<CashReportCurrency [^>]*BASE_SUMMARY[^>]*/>', b"", x)
+        return x
+
+    def test_ibkr_base_currency_total_covers_cash_without_rates(self):
+        view = portfolio.build([self.eur_cash()], from_inception=True)
+        self.assertEqual(view["cashBase"], 14930.50)
+        self.assertEqual(view["value"], 267238.50)
+        self.assertEqual(view["warnings"], [])
+        self.assertEqual(len(view["history"]), 1)
+
+    def test_missing_rates_without_base_total_are_left_out_and_flagged(self):
+        view = portfolio.build([self.eur_cash(base_summary=False)], from_inception=True)
+        self.assertEqual(view["cashBase"], 14820.50)
+        self.assertTrue(view["warnings"])
+        self.assertEqual(view["history"], [])
+
+    def test_daily_nav_section_drives_the_value_history(self):
+        nav = (b'<EquitySummaryInBase>'
+               b'<EquitySummaryByReportDateInBase accountId="SYNTHETIC-7" currency="USD" reportDate="20260105" cash="228037.06" stock="0" total="228037.06" />'
+               b'<EquitySummaryByReportDateInBase accountId="SYNTHETIC-7" currency="USD" reportDate="20260106" cash="14711.66" stock="213325.40" total="228037.06" />'
+               b'<EquitySummaryByReportDateInBase accountId="SYNTHETIC-7" currency="USD" reportDate="20261021" cash="14820.50" stock="252308.00" total="267128.50" />'
+               b'</EquitySummaryInBase>')
+        view = portfolio.build([ACTIVITY.replace(b"<CorporateActions />", b"<CorporateActions />" + nav)], from_inception=True)
+        self.assertEqual(view["historySource"], "nav")
+        self.assertEqual([h["date"] for h in view["history"]], ["2026-01-05", "2026-01-06", "2026-10-21"])
+        self.assertEqual(view["history"][-1]["value"], 267128.50)
+        self.assertEqual(portfolio.build([ACTIVITY])["historySource"], "reports")
+
+    def test_weekend_report_compares_with_the_previous_trading_day(self):
+        # Reports end Wednesday 21, Friday 23 and Sunday 25 October; Sunday carries Friday's prices.
+        view = portfolio.build([ACTIVITY, later_report(2), later_report(4)], from_inception=True)
+        self.assertEqual(view["asOf"], "2026-10-25")
+        self.assertEqual(view["previousDate"], "2026-10-21")
+        self.assertEqual(view["positions"][0]["previous"], 182.64)
+
     def test_second_report_supplies_previous_marks_and_history(self):
         view = portfolio.build([ACTIVITY, later_report(2)], from_inception=True)
         self.assertEqual(view["previousDate"], "2026-10-21")
@@ -359,6 +401,46 @@ class ServerTests(TestCase):
         self.assertTrue(blobs)
         self.assertFalse(any(b"tvly-SYNTHETIC" in row[0] for row in blobs))
         self.assertNotIn(b"tvly-SYNTHETIC", self.server.app.store.path.read_bytes())
+
+    def test_company_routes_need_an_sec_contact_and_validate_input(self):
+        from still.companies import Directory
+        from test_companies import FakeSec
+        sec = FakeSec()
+        self.server.app.companies = Directory(self.server.app.store.folder, lambda: self.server.app.store.setting("secContact"), transport=sec)
+        self.setup_owner()
+        self.assertEqual(self.json("/api/companies/search?q=apple")[1], {"results": [], "needsContact": True})
+        self.assertEqual(self.call("/api/search-settings", {"secContact": "not an email"})[0], 400)
+        self.assertEqual(self.json("/api/search-settings", {"secContact": "owner@example.com"})[1]["secContact"], "owner@example.com")
+        status, data = self.json("/api/companies/search?q=apple")
+        self.assertEqual(status, 200)
+        self.assertEqual(data["results"][0]["ticker"], "AAPS")
+        self.assertEqual(self.json("/api/companies/profile?ticker=AAPS")[1]["keyFilings"][0]["form"], "10-Q")
+        self.assertEqual(self.call("/api/companies/profile?ticker=<script>")[0], 400)
+        self.assertEqual(self.call("/api/companies/profile?ticker=NOPE")[0], 400)
+        self.assertEqual(self.server.app.news.env.get("STILL_NEWS_USER_AGENT"), "Still/0.1 (owner@example.com)")
+
+    def test_price_routes_check_keys_and_serve_quotes_history_and_portfolio(self):
+        from datetime import datetime, timezone
+        from still.prices import Prices
+        from test_prices import FakeAlpaca
+        app = self.server.app
+        app.prices = Prices(app.store, app.auth, transport=FakeAlpaca(), now=lambda: datetime(2026, 10, 26, 15, tzinfo=timezone.utc))
+        self.setup_owner()
+        self.json("/api/ibkr/upload", raw=ACTIVITY, ctype="application/xml")
+        self.assertFalse(self.json("/api/portfolio")[1]["prices"])
+        self.assertEqual(self.call("/api/prices/quotes?symbols=NVDA")[0], 400)  # No keys yet.
+        self.assertEqual(self.call("/api/prices/settings", {"keyId": "WRONGKEYID", "secret": "WRONGSECRET"})[0], 400)
+        self.assertFalse(self.json("/api/prices/settings")[1]["configured"])
+        status, data = self.json("/api/prices/settings", {"keyId": "SYNTHKEYID1", "secret": "SYNTHSECRET1"})
+        self.assertEqual((status, data["configured"], data["test"]["price"]), (200, True, 101.5))
+        self.assertNotIn("SYNTHSECRET1", json.dumps(self.json("/api/prices/settings")[1]))
+        self.assertTrue(self.json("/api/portfolio")[1]["prices"])
+        self.assertEqual(set(self.json("/api/prices/quotes?symbols=NVDA,MSFT")[1]["quotes"]), {"NVDA", "MSFT"})
+        self.assertEqual(self.json("/api/prices/history?symbol=NVDA&range=1M")[1]["bars"][-1], {"date": "2026-10-21", "close": 182.64})
+        self.assertEqual(self.call("/api/prices/history?symbol=NVDA&range=10Y")[0], 400)
+        history = self.json("/api/prices/portfolio")[1]
+        self.assertEqual(history["days"][-1]["value"], 267128.50)
+        self.assertFalse(self.json("/api/prices/remove", {})[1]["configured"])
 
     def test_lock_sign_in_and_reset(self):
         self.setup_owner()

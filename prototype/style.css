@@ -115,3 +115,20 @@ code{font-size:12px;background:var(--raised);padding:1px 5px;border-radius:4px;w
 .guide-figure figcaption{font-size:11px;color:var(--faint);margin-top:6px}
 .guide-key{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--accent);color:var(--ground);font-size:11px;margin-right:2px}
 .guide-steps p+p{margin-top:8px}
+.company-facts{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:18px 24px;margin:0 0 8px;padding:18px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.company-facts dt{font-size:12px;color:var(--muted);margin-bottom:6px}
+.company-facts dd{font-size:14px;margin:0}
+.company-results{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px}
+.company-result{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;text-align:left;border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;font-size:13px}
+.company-result:hover{background:var(--raised)}
+.company-result small{grid-column:2;color:var(--faint);font-size:11px}
+.filings-filter{margin-bottom:14px}
+.filing-link{text-decoration:underline;text-underline-offset:3px;overflow-wrap:anywhere}
+.filing-link:hover{color:var(--accent)}
+.table-frame table.filings-table{min-width:0;width:100%}
+.filings-table td{white-space:normal;vertical-align:top}
+.filings-table td:first-child{white-space:nowrap}
+.chart-header{flex-wrap:wrap;gap:12px}
+.chart-controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.chart-legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;color:var(--muted);margin:-4px 0 8px;min-height:0}
+.chart-legend:empty{display:none}

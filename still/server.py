@@ -12,7 +12,7 @@ from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Thread
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 import csv
 import io
 import json
@@ -24,13 +24,16 @@ from ibkr.flex import MAX_REPORT_BYTES, FlexClient, FlexError
 from news.service import NewsError, NewsService
 
 from .auth import COOKIE, Auth, AuthError
+from .companies import Directory, SecError, valid_contact
+from .portfolio import PortfolioError
+from .prices import Prices, PriceError
 from .paths import data_dir
 from .store import Store
 from .sync import Sync, SyncError
 
 ROOT = Path(__file__).resolve().parents[1] / "prototype"
 ASSETS = {"/": "index.html", "/index.html": "index.html", **{"/" + p: p for p in (
-    "style.css", "data.js", "model.js", "boot.js", "gate.js", "settings.js", "app.js", "news.js", "news-sources.js",
+    "style.css", "data.js", "model.js", "boot.js", "gate.js", "settings.js", "companies.js", "app.js", "news.js", "news-sources.js",
     "assets/charts.js", "assets/public-sans.ttf", "assets/guide/menu.webp", "assets/guide/flex-queries.webp",
     "assets/guide/sections.webp", "assets/guide/delivery.webp", "assets/guide/review.webp", "assets/guide/query-id.webp",
     "assets/guide/token.webp")}}
@@ -59,6 +62,10 @@ class SearchSettings(Mapping):
         if name in SEARCH_ENV:
             key = self.auth.key
             return self.store.secret(key, SEARCH_SECRETS[SEARCH_ENV[name]]) if key else default
+        if name == "STILL_NEWS_USER_AGENT":
+            # SEC's fair-access policy asks every app to identify itself with a contact email.
+            contact = self.store.setting("secContact")
+            return f"Still/0.1 ({contact})" if contact else default
         if name == "STILL_SEARCH_CALL_LIMIT":
             return str((self.store.setting("search") or {}).get("limit", 50))
         return default
@@ -77,12 +84,16 @@ class SearchSettings(Mapping):
 
 
 class App:
-    def __init__(self, folder: Path | None = None, *, news: NewsService | None = None, client_factory=FlexClient,
+    def __init__(self, folder: Path | None = None, *, news: NewsService | None = None, companies: Directory | None = None,
+                 prices: Prices | None = None,
+                 client_factory=FlexClient,
                  today=date.today):
         self.store = Store(folder or data_dir())
         self.auth = Auth(self.store)
         self.sync = Sync(self.store, self.auth, client_factory=client_factory, today=today)
         self.news = news or NewsService(env=SearchSettings(self.store, self.auth))
+        self.companies = companies or Directory(self.store.folder, lambda: self.store.setting("secContact"))
+        self.prices = prices or Prices(self.store, self.auth)
         self.server: ThreadingHTTPServer | None = None
 
     # Session ----------------------------------------------------------------
@@ -154,7 +165,8 @@ class App:
     def portfolio(self, h, body):
         if self.sync.view is None and self.sync.view_error is None and self.store.reports():
             self.sync.rebuild()
-        return {"mode": self.store.setting("mode"), "view": self.sync.view, "error": self.sync.view_error}
+        return {"mode": self.store.setting("mode"), "view": self.sync.view, "error": self.sync.view_error,
+                "prices": self.prices.configured()}
 
     def export_holdings(self, h, body):
         view = self.sync.view
@@ -188,6 +200,7 @@ class App:
             "attention": attention, "reports": self.store.reports(),
             "reconciliation": view["reconciliation"] if view else None,
             "asOf": view["asOf"] if view else None, "summary": view["summary"] if view else None,
+            "coverageStart": view["coverageStart"] if view else None, "firstActivity": view["firstActivity"] if view else None,
             "viewError": self.sync.view_error,
         }
 
@@ -281,12 +294,17 @@ class App:
     def search_settings(self, h, body):
         settings = self.store.setting("search") or {}
         return {"provider": settings.get("provider"), "limit": settings.get("limit", 50),
+                "secContact": self.store.setting("secContact"),
                 "configured": {p: self.store.has_secret(SEARCH_SECRETS[p]) or bool(os.environ.get(e))
                                for e, p in SEARCH_ENV.items()}}
 
     def save_search_settings(self, h, body):
         provider, value, limit = body.get("provider"), body.get("value"), body.get("limit")
         settings = dict(self.store.setting("search") or {})
+        if "secContact" in body:
+            contact = body["secContact"]
+            self.store.set_setting("secContact", valid_contact(contact) if contact not in (None, "") else None)
+            self.companies.entries = None  # Reload lists with the new identity on next use.
         if provider is not None:
             if provider not in SEARCH_SECRETS:
                 raise ApiError(400, "Choose SearXNG, Brave or Tavily.")
@@ -309,6 +327,46 @@ class App:
             settings["limit"] = limit
         self.store.set_setting("search", settings)
         return self.search_settings(h, body)
+
+    # Companies -------------------------------------------------------------
+    def company_search(self, h, body):
+        query = (h.query.get("q") or [""])[0]
+        if not self.store.setting("secContact"):
+            return {"results": [], "needsContact": True}
+        return {"results": self.companies.search(query), "needsContact": False}
+
+    def company_profile(self, h, body):
+        ticker = (h.query.get("ticker") or [""])[0]
+        if not re.fullmatch(r"[A-Za-z0-9.\- ]{1,16}", ticker):
+            raise ApiError(400, "Invalid ticker.")
+        return self.companies.profile(ticker)
+
+    # Prices ----------------------------------------------------------------
+    def price_settings(self, h, body):
+        return {"configured": self.prices.configured(), "savedAt": self.store.setting("pricesSavedAt")}
+
+    def save_price_settings(self, h, body):
+        quote = self.prices.save_keys(body.get("keyId"), body.get("secret"))
+        return {**self.price_settings(h, body), "test": quote}
+
+    def remove_price_settings(self, h, body):
+        self.prices.remove_keys()
+        return self.price_settings(h, body)
+
+    def price_quotes(self, h, body):
+        symbols = [s for s in ",".join(h.query.get("symbols") or []).split(",") if re.fullmatch(r"[A-Za-z0-9.\- ]{1,16}", s)]
+        return {"quotes": self.prices.quotes(symbols), "asOf": self.prices.now().isoformat(timespec="seconds")}
+
+    def price_history(self, h, body):
+        symbol, range_key = (h.query.get("symbol") or [""])[0], (h.query.get("range") or ["1Y"])[0]
+        if not re.fullmatch(r"[A-Za-z0-9.\- ]{1,16}", symbol) or range_key not in ("1M", "3M", "YTD", "1Y", "5Y", "ALL"):
+            raise ApiError(400, "Invalid price history request.")
+        return {"symbol": symbol, "range": range_key, "bars": self.prices.history(symbol, range_key)}
+
+    def price_portfolio(self, h, body):
+        if self.sync.ledger is None and self.store.reports():
+            self.sync.rebuild()
+        return self.prices.portfolio(self.sync.ledger)
 
     def remove_search_provider(self, h, body):
         provider = body.get("provider")
@@ -339,6 +397,10 @@ class App:
             ("GET", "/api/search-settings"): self.search_settings,
             ("POST", "/api/search-settings"): self.save_search_settings,
             ("POST", "/api/search-settings/remove"): self.remove_search_provider,
+            ("GET", "/api/companies/search"): self.company_search, ("GET", "/api/companies/profile"): self.company_profile,
+            ("GET", "/api/prices/settings"): self.price_settings, ("POST", "/api/prices/settings"): self.save_price_settings,
+            ("POST", "/api/prices/remove"): self.remove_price_settings, ("GET", "/api/prices/quotes"): self.price_quotes,
+            ("GET", "/api/prices/history"): self.price_history, ("GET", "/api/prices/portfolio"): self.price_portfolio,
         }
         return public, private
 
@@ -398,6 +460,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def handle_api(self, path: str):
         self.cookie, self.token = None, self.read_token()
+        self.query = parse_qs(urlsplit(self.path).query, max_num_fields=10)
         self.signed_in = self.app.auth.check(self.token)
         public, private = self.app.routes()
         key = (self.command, path)
@@ -412,7 +475,7 @@ class Handler(BaseHTTPRequestHandler):
             result = (public.get(key) or private[key])(self, body)
         except ApiError as error:
             return self.reply(error.status, {"error": str(error)})
-        except (AuthError, SyncError, NewsError, FlexError) as error:
+        except (AuthError, SyncError, NewsError, FlexError, SecError, PriceError, PortfolioError) as error:
             return self.reply(400, {"error": str(error)})
         except Exception:
             return self.reply(500, {"error": "Something went wrong; nothing was shown or logged. Try again."})

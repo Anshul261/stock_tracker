@@ -23,19 +23,27 @@
     };
     return Object.freeze({
       live: Boolean(raw.live), currency: raw.currency, asOf: raw.asOf, previousDate: raw.previousDate||null,
-      positions: Object.freeze(positions), account: Object.freeze(account), history: raw.history||[],
+      positions: Object.freeze(positions), account: Object.freeze(account), history: raw.history||[], historySource: raw.historySource||'reports',
       reconciliation: raw.reconciliation||null, warnings: raw.warnings||[], notice: raw.notice||'',
-      cents, positionValue, purchaseValue, positionGain, positionDay,
+      cents, positionValue, purchaseValue, positionGain, positionDay, raw,
     });
+  }
+
+  // Live quotes replace report prices; the previous close makes the change a true "today" figure.
+  function withLive(data, quotes) {
+    if (!data.raw || !data.live) return data;
+    const positions = data.raw.positions.map(p => { const q = quotes[p.symbol];
+      return q ? {...p, price: q.price, previous: q.previousClose ?? p.previous, liveTime: q.time, liveSource: q.source} : p; });
+    return build({...data.raw, positions});
   }
 
   function fromServer(view) {
     return build({
       live: true, currency: view.baseCurrency, asOf: view.asOf, previousDate: view.previousDate,
       positions: view.positions, cash: view.cashBase, history: view.history, firstPurchase: view.firstPurchase,
-      reconciliation: view.reconciliation, warnings: view.warnings,
+      reconciliation: view.reconciliation, warnings: view.warnings, historySource: view.historySource,
     });
   }
 
-  window.StillModel = Object.freeze({build, fromServer});
+  window.StillModel = Object.freeze({build, fromServer, withLive});
 })();

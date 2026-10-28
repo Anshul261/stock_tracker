@@ -11,7 +11,7 @@ css = (source / "style.css").read_text()
 font = base64.b64encode((source / 'assets/public-sans.ttf').read_bytes()).decode()
 css = css.replace("url('assets/public-sans.ttf')", "url('data:font/ttf;base64," + font + "')")
 html = html.replace('<link rel="stylesheet" href="style.css">', '<style>\n' + css + '\n</style>')
-for name in ['model.js', 'data.js', 'gate.js', 'boot.js', 'assets/charts.js', 'news-sources.js', 'news.js', 'settings.js', 'app.js']:
+for name in ['model.js', 'data.js', 'gate.js', 'boot.js', 'assets/charts.js', 'news-sources.js', 'news.js', 'settings.js', 'companies.js', 'app.js']:
     html = html.replace('<script src="' + name + '"></script>', '<script>\n' + (source / name).read_text() + '\n</script>')
 licenses = '\n\n'.join((source / 'assets' / name).read_text() for name in ['LICENSE-taste-skill.txt', 'OFL-public-sans.txt'])
 html = html.replace('</head>', '<!-- Bundled component licenses:\n' + licenses + '\n-->\n</head>')

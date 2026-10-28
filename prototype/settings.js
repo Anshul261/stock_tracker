@@ -49,7 +49,13 @@
       <p>Still recomputes positions, cash and cost basis from the report’s own transactions and compares them with IBKR’s totals. Unverified means the report alone cannot settle a check; it is never counted as passed.</p>
       ${rows ? `<div class="table-frame keep-table"><table class="check-table" aria-label="Checks that did not pass"><thead><tr><th>Status</th><th>Check</th><th>For</th><th>Why</th></tr></thead><tbody>${rows}</tbody></table></div>` : ''}
       ${r.notices.length ? `<ul class="notice-list">${r.notices.map(n => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}
-      ${!r.fromInception && c.unverified ? '<p class="settings-note">Quantity and cost-basis checks need the starting holdings. If your reports begin when the account opened, tick that option below; otherwise import earlier history.</p>' : ''}`;
+      ${!r.fromInception && c.unverified ? inceptionHint(s) : ''}`;
+  }
+  function inceptionHint(s) {
+    const before = s.coverageStart && s.firstActivity && s.coverageStart < s.firstActivity;
+    return `<div class="data-banner"><p>Quantity and cost-basis checks need to know what you held before your first imported report.${before
+      ? ` Your reports start on <strong>${when(s.coverageStart)}</strong>, and the first trade or cash movement in them is on <strong>${when(s.firstActivity)}</strong>. If your account was opened (or first funded) after ${when(s.coverageStart)}, tick <strong>My imported reports start when the account opened</strong> below.`
+      : ` Use <strong>Import history</strong> with a date on or before the day you opened the account, then tick <strong>My imported reports start when the account opened</strong>.`}</p></div>`;
   }
   function job(s) {
     const j = s.job;
@@ -65,10 +71,10 @@
     {title: 'Create an Activity Flex Query', body: 'In the <strong>Activity Flex Query</strong> panel, click <strong>+</strong> in its top-right corner. Name the query, for example <em>Still</em>. Skip “Configure with AI”.',
       figures: [['assets/guide/flex-queries.webp', 'Flex Queries page with the Activity Flex Query plus button and the Flex Web Service gear highlighted', 1220, 600]]},
     {title: 'Choose these sections, not all of them', body: `<p>Under <strong>Sections</strong>, select:</p>
-      <ul class="guide-sections"><li><b>a</b> Account Information</li><li><b>b</b> Cash Report</li><li><b>c</b> Cash Transactions</li><li><b>d</b> Corporate Actions</li><li><b>e</b> Open Positions</li><li><b>f</b> Trades</li><li><b>g</b> Transfers</li></ul>
+      <ul class="guide-sections"><li><b>a</b> Account Information</li><li><b>b</b> Cash Report</li><li><b>c</b> Cash Transactions</li><li><b>d</b> Corporate Actions</li><li><b>e</b> Open Positions</li><li><b>f</b> Trades</li><li><b>g</b> Transfers</li><li><b>h</b> Net Asset Value (NAV) in Base</li></ul>
       <p>Each one opens a list of fields. For <strong>Account Information</strong>, tick only <strong>Account ID</strong> and <strong>Currency</strong>; Still needs nothing else there, and leaving out your name, address and date of birth keeps them out of the report. For the others, choose <strong>Select All</strong>. Then click <strong>Save</strong>. Where a section offers a level of detail, pick <strong>Summary</strong> for Open Positions, <strong>Execution</strong> for Trades and <strong>Detail</strong> for Cash Transactions.</p>
-      <p>Transfers is recommended: Still doesn’t calculate with it yet, but it lets reconciliation say “unverified” instead of reporting a false mismatch when shares moved in from another broker. If you trade options, also add <strong>Option Exercises, Assignments and Expirations</strong> for the same reason. Still doesn’t use the other sections, so leave them off.</p>`,
-      figures: [['assets/guide/sections.webp', 'Flex query section list with the seven sections Still needs highlighted', 866, 896]]},
+      <p>Transfers is recommended: Still doesn’t calculate with it yet, but it lets reconciliation say “unverified” instead of reporting a false mismatch when shares moved in from another broker. If you trade options, also add <strong>Option Exercises, Assignments and Expirations</strong> for the same reason. <strong>Net Asset Value (NAV) in Base</strong> gives IBKR’s total account value for every day, which draws your value-over-time chart; without it the chart has one point per report. Still doesn’t use the other sections, so leave them off.</p>`,
+      figures: [['assets/guide/sections.webp', 'Flex query section list with the eight sections Still uses highlighted', 866, 896]]},
     {title: 'Set delivery and format, then create', body: `<p>Under <strong>Delivery Configuration</strong>, check that your account is selected, then set <b class="guide-key">a</b> <strong>Format: XML</strong> and <b class="guide-key">b</b> <strong>Period: Last 365 Calendar Days</strong>.</p>
       <p>Under <strong>General Configuration</strong> set <b class="guide-key">c</b> <strong>Date Format: yyyyMMdd</strong>, <b class="guide-key">d</b> <strong>Time Format: HHmmss</strong> and <b class="guide-key">e</b> <strong>Date/Time Separator: ; (semi-colon)</strong>. Still reads only these formats. Set <b class="guide-key">f</b> <strong>Include Currency Rates?</strong> to <strong>Yes</strong>; Still uses the rates to convert cash and holdings in other currencies to your base currency. Leave the other options at their defaults (<strong>No</strong>).</p>
       <p>Click <strong>Continue</strong>, check the summary, and click <b class="guide-key">g</b> <strong>Create</strong>. IBKR confirms that the query has been saved; click <strong>Ok</strong>.</p>`,
@@ -183,7 +189,10 @@
     ['tavily', 'Tavily', 'API key from your Tavily account', 'Paste your API key', 'password'],
   ];
   function search(s) {
-    return `<section class="settings-block"><h2>Search provider</h2><div><p>News → Search sends only the words you type to the provider you choose here. Holdings, quantities and IBKR data are never attached. Paid providers can charge per search.</p>
+    return `<section class="settings-block"><h2>SEC company data</h2><div><p>Search every US-listed company and fund, and read their SEC filings, from SEC EDGAR. It’s free, but SEC asks every app to identify itself with a contact email it can use if your requests cause a problem. Still sends this email only to sec.gov, in each request’s User-Agent header, and also uses it for the SEC press-release feed.</p>
+      <form id="sec-contact" class="settings-inline"><label class="field"><span>Contact email for SEC</span><input name="contact" type="email" maxlength="256" autocomplete="email" value="${esc(s.secContact || '')}" placeholder="you@example.com"></label><button class="button" type="submit">${s.secContact ? 'Update' : 'Save'}</button>${s.secContact ? '<button class="text-button" type="button" id="sec-contact-remove">Remove</button>' : ''}</form>
+      <p class="field-hint">${s.secContact ? 'Company search and filings are on.' : 'Without it, search covers only your holdings.'} SEC data has no prices.</p><p class="form-message" hidden></p></div></section>
+    <section class="settings-block"><h2>Search provider</h2><div><p>News → Search sends only the words you type to the provider you choose here. Holdings, quantities and IBKR data are never attached. Paid providers can charge per search.</p>
       ${PROVIDERS.map(([id, name, hint, placeholder, type]) => `<form class="provider-form" data-provider="${id}"><div class="provider-head"><strong>${name}</strong><span class="${s.configured[id] ? 'positive' : 'muted'}">${s.configured[id] ? (s.provider === id ? 'Configured · default' : 'Configured') : 'Not configured'}</span></div>
         <label class="field"><span>${hint}</span><input name="value" type="${type}" maxlength="2048" autocomplete="off" placeholder="${s.configured[id] ? 'Saved — enter again to replace' : placeholder}"></label>
         <div class="settings-actions"><button class="button" type="submit">${s.configured[id] ? 'Save & make default' : 'Save'}</button>${s.configured[id] ? `<button class="text-button" type="button" data-remove="${id}">Remove</button>` : ''}</div><p class="form-message" hidden></p></form>`).join('')}
@@ -191,6 +200,16 @@
     <section class="settings-block"><h2>Search limit</h2><div><form id="search-limit" class="settings-inline"><label class="field"><span>Searches allowed each time Still starts</span><input name="limit" type="number" min="1" max="1000" value="${s.limit}" required></label><button class="button" type="submit">Save limit</button></form><p class="field-hint">A safeguard against unexpected provider charges. Results are cached for 10 minutes.</p><p class="form-message" hidden></p></div></section>`;
   }
   function bindSearch(el) {
+    const contactForm = $('#sec-contact', el), contactOut = $('.form-message', contactForm.parentElement);
+    contactForm.addEventListener('submit', async e => {
+      e.preventDefault();
+      const r = await act($('button', contactForm), () => window.StillApi('/api/search-settings', {method:'POST', body:{secContact: contactForm.contact.value.trim()}}), contactOut);
+      if (r) { toast('SEC contact saved. Company search is on.'); remount(); }
+    });
+    $('#sec-contact-remove', el)?.addEventListener('click', async e => {
+      const r = await act(e.target, () => window.StillApi('/api/search-settings', {method:'POST', body:{secContact: ''}}), contactOut);
+      if (r) { toast('SEC contact removed.'); remount(); }
+    });
     el.querySelectorAll('.provider-form').forEach(form => form.addEventListener('submit', async e => {
       e.preventDefault();
       const r = await act($('button', form), () => window.StillApi('/api/search-settings', {method:'POST', body:{provider: form.dataset.provider, value: form.value.value}}), $('.form-message', form));
@@ -204,6 +223,38 @@
       e.preventDefault();
       const r = await act($('button', e.target), () => window.StillApi('/api/search-settings', {method:'POST', body:{limit: Number(e.target.limit.value)}}), $('.form-message', e.target.parentElement));
       if (r) toast('Search limit saved.');
+    });
+  }
+
+  // Prices ----------------------------------------------------------------------
+  function prices(s) {
+    return `<section class="settings-block"><h2>Alpaca market data</h2><div>
+      <p>Live prices and daily price history come from Alpaca’s market data API, with your own free Alpaca account. Still uses them for live quotes on your holdings and on companies you open, to rebuild your portfolio’s value for every trading day from your IBKR trades, and to compare your return with the S&amp;P 500.</p>
+      <dl class="connection-facts"><div><dt>Status</dt><dd>${s.configured ? `Connected · saved ${when(s.savedAt)}` : 'Not connected'}</dd></div><div><dt>Live prices</dt><dd>IEX exchange, real time</dd></div><div><dt>History</dt><dd>All US exchanges, daily, since 2016</dd></div></dl>
+      <details class="settings-guide" ${s.configured ? '' : 'open'}><summary>Get a free Alpaca API key</summary><ol>
+        <li>Sign up with Alpaca. A free paper-trading account is enough for market data; Still never places trades.</li>
+        <li>On your Alpaca dashboard, find <strong>API Keys</strong> on the right and choose <strong>Generate</strong>.</li>
+        <li>Copy the <strong>API key ID</strong> and the <strong>secret key</strong>. Alpaca shows the secret only once.</li></ol>
+        <div class="settings-actions">${link('https://app.alpaca.markets/', 'Open Alpaca', 'button')}${link('https://docs.alpaca.markets/us/docs/about-market-data-api', 'About Alpaca market data')}</div></details>
+      <form id="prices-keys" class="settings-form" autocomplete="off">
+        <label class="field"><span>API key ID</span><input name="keyId" maxlength="128" autocomplete="off" spellcheck="false" placeholder="${s.configured ? 'Saved — enter again to replace' : 'Paste your API key ID'}" required></label>
+        <label class="field"><span>Secret key</span><input name="secret" type="password" maxlength="128" autocomplete="off" required></label>
+        <p class="field-hint">Still checks the keys with Alpaca before saving, stores them encrypted on this computer and sends them only to data.alpaca.markets. Fetched prices are cached encrypted too, because the list of symbols reveals your holdings.</p>
+        <p class="form-message" hidden></p>
+        <div class="settings-actions"><button class="button primary" type="submit">Check &amp; save</button>${s.configured ? '<button class="text-button" type="button" id="prices-remove">Remove keys</button>' : ''}</div></form>
+      <p class="detail-note">Alpaca’s free plan: live prices from the IEX exchange only (real trades, but a small share of all trading), full-market daily history once it is at least 15 minutes old, and 200 requests a minute. Alpaca’s terms apply to your account.</p>
+    </div></section>`;
+  }
+  function bindPrices(el) {
+    const form = $('#prices-keys', el), out = $('.form-message', form);
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      const r = await act($('button[type=submit]', form), () => window.StillApi('/api/prices/settings', {method: 'POST', body: {keyId: form.keyId.value.trim(), secret: form.secret.value.trim()}}), out);
+      if (r) { form.reset(); toast(r.test?.price ? `Connected. S&P 500 ETF (SPY) last traded at $${r.test.price.toFixed(2)}.` : 'Alpaca keys saved.'); setTimeout(() => location.reload(), 1200); }
+    });
+    $('#prices-remove', el)?.addEventListener('click', async e => {
+      const r = await act(e.target, () => window.StillApi('/api/prices/remove', {method: 'POST'}), out);
+      if (r) { toast('Alpaca keys and cached prices removed.'); setTimeout(() => location.reload(), 900); }
     });
   }
 
@@ -267,10 +318,11 @@
     }
     el.innerHTML = '<p class="news-loading" role="status">Loading…</p>';
     try {
-      const path = {ibkr:'/api/ibkr', search:'/api/search-settings', security:'/api/settings', privacy:'/api/settings'}[tab];
+      const path = {ibkr:'/api/ibkr', prices:'/api/prices/settings', search:'/api/search-settings', security:'/api/settings', privacy:'/api/settings'}[tab];
       const s = context.server ? await window.StillApi(path) : {};
       if (version !== generation || !el.isConnected) return;
       if (tab === 'ibkr') { el.innerHTML = ibkr(s, context); bindIbkr(el, s); }
+      else if (tab === 'prices') { el.innerHTML = prices(s); bindPrices(el); }
       else if (tab === 'search') { el.innerHTML = search(s); bindSearch(el); }
       else if (tab === 'security') { el.innerHTML = security(s); bindSecurity(el); }
       else { el.innerHTML = privacy(s, context, data); bindPrivacy(el); }
